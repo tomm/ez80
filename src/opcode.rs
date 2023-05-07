@@ -1,5 +1,6 @@
 use super::environment::*;
 use super::registers::*;
+use super::state::*;
 
 type OpcodeFn = dyn Fn(&mut Environment);
 
@@ -74,7 +75,11 @@ pub fn build_pop_rr(rr: Reg16) -> Opcode {
         name: format!("POP {:?}", rr),
         action: Box::new(move |env: &mut Environment| {
             let value = env.pop();
-            env.set_reg16(rr, value);
+            if env.state.is_op_long() && rr != Reg16::AF {
+                env.set_reg24(rr, value);
+            } else {
+                env.set_reg16(rr, value as u16);
+            }
         })
     }
 }
@@ -83,7 +88,7 @@ pub fn build_push_rr(rr: Reg16) -> Opcode {
     Opcode {
         name: format!("PUSH {:?}", rr),
         action: Box::new(move |env: &mut Environment| {
-            let value = env.reg16_ext(rr);
+            let value = env.reg16or24_ext(rr);
             env.push(value);
         })
     }
@@ -104,6 +109,24 @@ pub fn build_im(im: u8) -> Opcode {
         name: format!("IM {}", im),
         action: Box::new(move |env: &mut Environment| {
             env.state.reg.set_interrupt_mode(im);
+        })
+    }
+}
+
+pub fn build_stmix() -> Opcode {
+    Opcode {
+        name: "STMIX".to_string(),
+        action: Box::new(move |env: &mut Environment| {
+            env.state.reg.madl = true;
+        })
+    }
+}
+
+pub fn build_rsmix() -> Opcode {
+    Opcode {
+        name: "RSMIX".to_string(),
+        action: Box::new(move |env: &mut Environment| {
+            env.state.reg.madl = false;
         })
     }
 }

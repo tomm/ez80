@@ -9,9 +9,15 @@ pub fn build_add_hl_rr(rr: Reg16) -> Opcode {
         name: format!("ADD HL, {:?}", rr),
         action: Box::new(move |env: &mut Environment| {
             let aa = env.index_value();
-            let bb = env.reg16_ext(rr);
-            let vv = operator_add16(env, aa, bb);
-            env.set_reg16(Reg16::HL, vv);
+            let bb = env.reg16or24_ext(rr);
+
+            if env.state.is_op_long() {
+                let vv = operator_add24(env, aa, bb);
+                env.set_reg24(Reg16::HL, vv);
+            } else {
+                let vv = operator_add16(env, aa as u16, bb as u16);
+                env.set_reg16(Reg16::HL, vv);
+            }
         })
     }
 }
@@ -21,9 +27,15 @@ pub fn build_adc_hl_rr(rr: Reg16) -> Opcode {
         name: format!("ADC HL, {:?}", rr),
         action: Box::new(move |env: &mut Environment| {
             let aa = env.index_value(); // This will always be HL.
-            let bb = env.reg16_ext(rr);
-            let vv = operator_adc16(env, aa, bb);
-            env.state.reg.set16(Reg16::HL, vv);
+            let bb = env.reg16or24_ext(rr);
+            
+            if env.state.is_op_long() {
+                let vv = operator_adc24(env, aa, bb);
+                env.state.reg.set24(Reg16::HL, vv);
+            } else {
+                let vv = operator_adc16(env, aa as u16, bb as u16);
+                env.state.reg.set16(Reg16::HL, vv);
+            }
         })
     }
 }
@@ -33,9 +45,14 @@ pub fn build_sbc_hl_rr(rr: Reg16) -> Opcode {
         name: format!("SBC HL, {:?}", rr),
         action: Box::new(move |env: &mut Environment| {
             let aa = env.index_value(); // This will always be HL.
-            let bb = env.reg16_ext(rr);
-            let vv = operator_sbc16(env, aa, bb);
-            env.state.reg.set16(Reg16::HL, vv);
+            let bb = env.reg16or24_ext(rr);
+            if env.state.is_op_long() {
+                let vv = operator_sbc24(env, aa, bb);
+                env.state.reg.set24(Reg16::HL, vv);
+            } else {
+                let vv = operator_sbc16(env, aa as u16, bb as u16);
+                env.state.reg.set16(Reg16::HL, vv);
+            }
         })
     }
 }
@@ -65,14 +82,18 @@ pub fn build_dec_r(r: Reg8) -> Opcode {
 }
 
 pub fn build_inc_dec_rr(rr: Reg16, inc: bool) -> Opcode {
-    let delta = if inc {1} else {-1_i16 as u16};
+    let delta = if inc {1} else {-1_i32 as u32};
     let mnemonic = if inc {"INC"} else {"DEC"};
     Opcode {
         name: format!("{} {:?}", mnemonic, rr),
         action: Box::new(move |env: &mut Environment| {
-            let mut v = env.reg16_ext(rr);
+            let mut v = env.reg16or24_ext(rr);
             v = v.wrapping_add(delta);
-            env.set_reg16(rr, v);
+            if env.state.is_op_long() {
+                env.set_reg24(rr, v);
+            } else {
+                env.set_reg16(rr, v as u16);
+            }
             // Note: flags not affected on the 16 bit INC and DEC
         })
     }    

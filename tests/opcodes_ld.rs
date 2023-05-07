@@ -48,7 +48,7 @@ fn test_ld_pnn_bc() {
 
     cpu.execute_instruction(&mut sys);
 
-    assert_eq!(0xde23, sys.peek16(0x1234));
+    assert_eq!(0xde23, sys._peek16(0x1234));
 }
 
 #[test]

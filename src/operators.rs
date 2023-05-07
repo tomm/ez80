@@ -58,6 +58,39 @@ pub fn operator_sbc16(env: &mut Environment, aa: u16, bb: u16) -> u16 {
     vv
 }
 
+pub fn operator_add24(env: &mut Environment, aaa: u32, bbb: u32) -> u32 {
+    let vvvv = aaa + bbb;
+
+    env.state.reg.update_add24_flags(aaa, bbb, vvvv);
+    vvvv & 0xffffff
+}
+
+pub fn operator_sbc24(env: &mut Environment, aaa: u32, bbb: u32) -> u32 {
+    let mut vvvv = aaa.wrapping_sub(bbb);
+    if env.state.reg.get_flag(Flag::C) {
+        vvvv = vvvv.wrapping_sub(1);
+    }
+    let vvv = vvvv & 0xffffff;
+
+    // TUZD-8.6
+    env.state.reg.update_arithmetic_flags_24(aaa, bbb, vvvv, true);
+    env.state.reg.put_flag(Flag::Z, vvv == 0);
+    vvv
+}
+
+pub fn operator_adc24(env: &mut Environment, aaa: u32, bbb: u32) -> u32 {
+    let mut vvvv = aaa.wrapping_add(bbb);
+    if env.state.reg.get_flag(Flag::C) {
+        vvvv = vvvv.wrapping_add(1);
+    }
+    let vvv = vvvv & 0xffffff;
+
+    // TUZD-8.6
+    env.state.reg.update_arithmetic_flags_24(aaa, bbb, vvvv, false);
+    env.state.reg.put_flag(Flag::Z, vvv == 0);
+    vvv
+}
+
 pub fn operator_inc(env: &mut Environment, a: u8) -> u8 {
     let aa = a as u16;
     let vv = aa + 1;
@@ -113,4 +146,9 @@ pub fn operator_cp(env: &mut Environment, a: u8, b: u8) -> u8 {
     // Note: flags 3 and 5 are taken from b. TUZD-8.4
     env.state.reg.update_undocumented_flags(b);
     a // Do not update the accumulator
+}
+
+pub fn operator_tst(env: &mut Environment, a: u8, b: u8) {
+    let v = a & b;
+    env.state.reg.update_logic_flags(a, b, v, true);
 }

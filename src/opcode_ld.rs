@@ -102,8 +102,8 @@ pub fn build_ld_a_prr(rr: Reg16) -> Opcode {
     Opcode {
         name: format!("LD A, ({:?})", rr),
         action: Box::new(move |env: &mut Environment| {
-            let address = env.state.reg.get16(rr);
-            let value = env.sys.peek(address);
+            let address = env.reg16mbase_or_24(rr);
+            let value = env.peek(address);
             env.state.reg.set_a(value);
         })
     }
@@ -113,8 +113,8 @@ pub fn build_ld_a_pnn() -> Opcode {
     Opcode {
         name: "LD A, (nn)".to_string(),
         action: Box::new(move |env: &mut Environment| {
-            let address = env.advance_immediate16();
-            let value = env.sys.peek(address);
+            let address = env.advance_immediate_16mbase_or_24();
+            let value = env.peek(address);
             env.state.reg.set_a(value);
         })
     }
@@ -126,8 +126,8 @@ pub fn build_ld_prr_a(rr: Reg16) -> Opcode {
         name: format!("LD ({:?}), A", rr),
         action: Box::new(move |env: &mut Environment| {
             let value = env.state.reg.a();
-            let address = env.state.reg.get16(rr);
-            env.sys.poke(address, value);
+            let address = env.reg16mbase_or_24(rr);
+            env.poke(address, value);
         })
     }
     
@@ -138,8 +138,8 @@ pub fn build_ld_pnn_a() -> Opcode {
         name: "LD (nn), A".to_string(),
         action: Box::new(move |env: &mut Environment| {
             let value = env.state.reg.a();
-            let address = env.advance_immediate16();
-            env.sys.poke(address, value);
+            let address = env.advance_immediate_16mbase_or_24();
+            env.poke(address, value);
         })
     }
     
@@ -151,8 +151,8 @@ pub fn build_ld_rr_nn(rr: Reg16) -> Opcode {
     Opcode {
         name: format!("LD {:?}, nn", rr),
         action: Box::new(move |env: &mut Environment| {
-            let value = env.advance_immediate16();
-            env.set_reg16(rr, value);
+            let value: u32 = env.advance_immediate16or24();
+            env.set_reg16or24(rr, value);
         })
     }
 }
@@ -161,8 +161,12 @@ pub fn build_ld_sp_hl() -> Opcode {
     Opcode {
         name: "LD SP, HL".to_string(),
         action: Box::new(move |env: &mut Environment| {
-            let value = env.reg16_ext(Reg16::HL);
-            env.set_reg16(Reg16::SP, value);
+            let value = env.reg16or24_ext(Reg16::HL);
+            if env.state.is_op_long() {
+                env.set_reg24(Reg16::SP, value);
+            } else {
+                env.set_reg16(Reg16::SP, value as u16);
+            }
         })
     }
 }
@@ -171,9 +175,13 @@ pub fn build_ld_pnn_rr(rr: Reg16, _fast: bool) -> Opcode {
     Opcode {
         name: format!("LD (nn), {:?}", rr),
         action: Box::new(move |env: &mut Environment| {
-            let address = env.advance_immediate16();
-            let value = env.reg16_ext(rr);
-            env.sys.poke16(address, value);
+            let address = env.advance_immediate_16mbase_or_24();
+            let value = env.reg16or24_ext(rr);
+            if env.state.is_op_long() {
+                env.poke24(address, value);
+            } else {
+                env.poke16(address, value as u16);
+            }
         })
     }
 }
@@ -182,9 +190,14 @@ pub fn build_ld_rr_pnn(rr: Reg16, _fast: bool) -> Opcode {
     Opcode {
         name: format!("LD {:?}, (nn)", rr),
         action: Box::new(move |env: &mut Environment| {
-            let address = env.advance_immediate16();
-            let value = env.sys.peek16(address);
-            env.set_reg16(rr, value);
+            let address = env.advance_immediate_16mbase_or_24();
+            if env.state.is_op_long() {
+                let value = env.peek24(address);
+                env.set_reg24(rr, value);
+            } else {
+                let value = env.peek16(address);
+                env.set_reg16(rr, value);
+            }
         })
     }
 }
@@ -213,9 +226,15 @@ pub fn build_ex_de_hl() -> Opcode {
     Opcode {
         name: "EX DE, HL".to_string(),
         action: Box::new(move |env: &mut Environment| {
-            let temp = env.state.reg.get16(Reg16::HL); // No IX/IY variant
-            env.state.reg.set16(Reg16::HL, env.state.reg.get16(Reg16::DE));
-            env.state.reg.set16(Reg16::DE, temp);
+            if env.state.is_op_long() {
+                let temp = env.state.reg.get24(Reg16::HL); // No IX/IY variant
+                env.state.reg.set24(Reg16::HL, env.state.reg.get24(Reg16::DE));
+                env.state.reg.set24(Reg16::DE, temp);
+            } else {
+                let temp = env.state.reg.get16(Reg16::HL); // No IX/IY variant
+                env.state.reg.set16(Reg16::HL, env.state.reg.get16(Reg16::DE));
+                env.state.reg.set16(Reg16::DE, temp);
+            }
         })         
     }
 }
@@ -224,11 +243,15 @@ pub fn build_ex_psp_hl() -> Opcode {
     Opcode {
         name: "EX (SP), HL".to_string(),
         action: Box::new(move |env: &mut Environment| {
-            let address = env.state.reg.get16(Reg16::SP);
-
-            let temp = env.reg16_ext(Reg16::HL);
-            env.set_reg16(Reg16::HL, env.sys.peek16(address));
-            env.sys.poke16(address, temp);
+            let address = env.state.sp();
+            let temp = env.reg16or24_ext(Reg16::HL);
+            if env.state.is_op_long() {
+                env.set_reg24(Reg16::HL, env.peek24(address));
+                env.poke24(address, temp);
+            } else {
+                env.set_reg16(Reg16::HL, env.peek16(address));
+                env.poke16(address, temp as u16);
+            }
         })         
     }
 }
@@ -238,12 +261,18 @@ pub fn build_ld_block((inc, repeat, postfix) : (bool, bool, &'static str)) -> Op
         name: format!("LD{}", postfix),
         action: Box::new(move |env: &mut Environment| {
             let value = env.reg8_ext(Reg8::_HL);
-            let address = env.state.reg.get16(Reg16::DE);
-            env.sys.poke(address, value);
+            let address = env.reg16mbase_or_24(Reg16::DE);
+            env.poke(address, value);
 
-            env.state.reg.inc_dec16(Reg16::DE, inc);
-            env.state.reg.inc_dec16(Reg16::HL, inc);
-            let bc = env.state.reg.inc_dec16(Reg16::BC, false /*decrement*/);
+            let bc = if env.state.is_op_long() {
+                env.state.reg.inc_dec24(Reg16::DE, inc);
+                env.state.reg.inc_dec24(Reg16::HL, inc);
+                env.state.reg.inc_dec24(Reg16::BC, false /*decrement*/)
+            } else {
+                env.state.reg.inc_dec16(Reg16::DE, inc);
+                env.state.reg.inc_dec16(Reg16::HL, inc);
+                env.state.reg.inc_dec16(Reg16::BC, false /*decrement*/)
+            };
 
             // TUZD-4.2
             let n = value.wrapping_add(env.state.reg.a());
@@ -255,9 +284,80 @@ pub fn build_ld_block((inc, repeat, postfix) : (bool, bool, &'static str)) -> Op
 
             if repeat && bc != 0 {
                 // Back to redo the instruction
-                let pc = env.state.reg.pc().wrapping_sub(2);
-                env.state.reg.set_pc(pc);
+                let pc = env.wrap_address(env.state.pc(), -2);
+                env.state.set_pc(pc);
             }
         })         
+    }
+}
+
+pub fn build_ld_a_mb() -> Opcode {
+    Opcode {
+        name: "LD A, MB".to_string(),
+        action: Box::new(|env: &mut Environment| {
+            env.state.reg.set8(Reg8::A, env.state.reg.mbase);
+        })
+    }
+}
+
+pub fn build_ld_mb_a() -> Opcode {
+    Opcode {
+        name: "LD MB, A".to_string(),
+        action: Box::new(|env: &mut Environment| {
+            env.state.reg.mbase = env.state.reg.get8(Reg8::A);
+        })
+    }
+}
+
+pub fn build_ld_idx_disp_rr(index_reg: Reg16, src: Reg16) -> Opcode {
+    Opcode {
+        name: format!("LD ({:?}+n), {:?}", index_reg, src),
+        action: Box::new(move |env: &mut Environment| {
+            let imm = env.advance_pc() as i8 as i32 as u32;
+            if env.state.is_op_long() {
+                let value = env.state.reg.get24(src);
+                let address = env.state.reg.get24(index_reg).wrapping_add(imm);
+                env.poke24(address, value);
+            } else {
+                let value = env.state.reg.get16(src);
+                let address = env.state.reg.get16_mbase(index_reg).wrapping_add(imm);
+                env.poke16(address, value);
+            }
+        })
+    }
+}
+
+pub fn build_ld_rr_idx_disp(dest: Reg16, index_reg: Reg16) -> Opcode {
+    Opcode {
+        name: format!("LD {:?}, ({:?}+n)", dest, index_reg),
+        action: Box::new(move |env: &mut Environment| {
+            let imm = env.advance_pc() as i8 as i32 as u32;
+            if env.state.is_op_long() {
+                let address = env.state.reg.get24(index_reg).wrapping_add(imm);
+                let value = env.peek24(address);
+                env.state.reg.set24(dest, value);
+            } else {
+                let address = env.state.reg.get16_mbase(index_reg).wrapping_add(imm);
+                let value = env.peek16(address);
+                env.state.reg.set16(dest, value);
+            }
+        })
+    }
+}
+
+pub fn build_ld_rr_ind_hl(dest: Reg16) -> Opcode {
+    Opcode {
+        name: format!("LD {:?}, (HL)", dest),
+        action: Box::new(move |env: &mut Environment| {
+            if env.state.is_op_long() {
+                let address = env.state.reg.get24(Reg16::HL);
+                let value = env.peek24(address);
+                env.state.reg.set24(dest, value);
+            } else {
+                let address = env.state.reg.get16_mbase(Reg16::HL);
+                let value = env.peek16(address);
+                env.state.reg.set16(dest, value);
+            }
+        })
     }
 }

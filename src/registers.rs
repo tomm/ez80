@@ -7,38 +7,50 @@ pub enum Reg8 {
     A = 0,
     /// 8 bit register F, can be accessed vif the flags methods
     F = 1, // Flags
+    /// 8 bit register BCU
+    BCU = 2,
     /// 8 bit register B
-    B = 2,
+    B = 3,
     /// 8 bit register C
-    C = 3,
+    C = 4,
+    /// 8 bit register DEU
+    DEU = 5,
     /// 8 bit register D
-    D = 4,
+    D = 6,
     /// 8 bit register E
-    E = 5,
+    E = 7,
+    /// 8 bit register HLU
+    HLU = 8,
     /// 8 bit register H, high byte of HL
-    H = 6,
+    H = 9,
     /// 8 bit register L, low byte of HL
-    L = 7,
+    L = 10,
     /// 8 bit register I
-    I = 8,
+    I = 11,
     /// 8 bit register R
-    R = 9,
+    R = 12,
+    /// 8 bit register IXU
+    IXU = 13,
     /// High byte of IX
-    IXH = 10,
+    IXH = 14,
     /// Low byte of IX
-    IXL = 11,
+    IXL = 15,
+    /// 8 bit register IYU
+    IYU = 16,
     /// High byte of IY
-    IYH = 12,
+    IYH = 17,
     /// Low byte of IY
-    IYL = 13,
+    IYL = 18,
+    /// XXX it isn't really called this. should be SPS for Z80 mode and SPL for ADL mode...
+    SPU = 19,
     /// High byte of SP
-    SPH = 14,
+    SPH = 20,
     /// Low byte of SP
-    SPL = 15,
+    SPL = 21,
     /// Pseudo register, has to be replaced by (HL) 
-     _HL = 16 // Invalid
+     _HL = 22 // Invalid
 }
-const REG_COUNT8: usize = 16;
+const REG_COUNT8: usize = 22;
 
 
 /// 16 bit registers, composed from 8 bit registers
@@ -59,6 +71,25 @@ pub enum Reg16 {
     /// 16 bit register SP
     SP = Reg8::SPH as isize
 }
+
+/*
+/// 24 bit registers, composed from 8 bit registers
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Reg24 {
+    /// 24 bit register BC
+    BC = Reg8::BCU as isize,
+    /// 24 bit register DE
+    DE = Reg8::DEU as isize,
+    /// 16 bit register HL
+    HL = Reg8::HLU as isize,
+    /// 24 bit register IX
+    IX = Reg8::IXU as isize,
+    /// 24 bit register IY
+    IY = Reg8::IYU as isize,
+    /// 24 bit register SPL
+    SPL = Reg8::SPU as isize
+}
+*/
 
 /// Z80 flags
 #[derive(Copy, Clone, Debug)]
@@ -96,11 +127,14 @@ impl fmt::Display for Reg8 {
 pub struct Registers {
     data: [u8; REG_COUNT8],
     shadow: [u8; REG_COUNT8],
-    pc: u16,
+    pub pc: u32,
     iff1: bool,
     iff2: bool,
     im: u8,
-    mode8080: bool
+    mode8080: bool,
+    pub adl: bool,  // ez80 24-bit flat addressing mode
+    pub madl: bool,  // ez80
+    pub mbase: u8,  // provides the top 8-bits of a 24-bit address when ez80 is in z80 mode
 }
 
 impl Registers {
@@ -113,7 +147,10 @@ impl Registers {
             iff1: false,
             iff2: false,
             im: 0,
-            mode8080: false
+            mode8080: false,
+            adl: false,
+            madl: false,
+            mbase: 0,
         };
 
         reg.set16(Reg16::AF, 0xffff);
@@ -169,6 +206,18 @@ impl Registers {
         v
     }
 
+    #[inline]
+    pub fn get16_mbase(&self, rr: Reg16) -> u32 {
+        ((self.mbase as u32) << 16) + self.get16(rr) as u32
+    }
+
+    #[inline]
+    pub fn get16_mbase_offset(&self, rr: Reg16, offset: u16) -> u32 {
+        // applies a 16-bit offset to the low 16-bits, wrapping within 16-bits,
+        // then set high byte of 24bits to mbase
+        ((self.mbase as u32) << 16) + self.get16(rr).wrapping_add(offset) as u32
+    }
+
     /// Returns the value of a 16 bit register
     #[inline]
     pub fn get16(&self, rr: Reg16) -> u16 {
@@ -191,7 +240,7 @@ impl Registers {
         }
     }
 
-    pub(crate) fn inc_dec16(&mut self, rr: Reg16, inc: bool) -> u16 {
+    pub(crate) fn inc_dec16(&mut self, rr: Reg16, inc: bool) -> u32 {
         let mut v = self.get16(rr);
         if inc {
             v = v.wrapping_add(1);
@@ -199,7 +248,35 @@ impl Registers {
             v = v.wrapping_sub(1);
         }
         self.set16(rr, v);
+        v as u32
+    }
+
+    pub(crate) fn inc_dec24(&mut self, rr: Reg16, inc: bool) -> u32 {
+        let mut v = self.get24(rr);
+        if inc {
+            v = v.wrapping_add(1);
+        } else {
+            v = v.wrapping_sub(1);
+        }
+        self.set24(rr, v);
         v
+    }
+
+    /// Returns the value of a 16 bit register
+    #[inline]
+    pub fn get24(&self, rr: Reg16) -> u32 {
+        self.data[rr as usize +1] as u32
+        + ((self.data[rr as usize] as u32) << 8)
+        + ((self.data[rr as usize -1] as u32) << 16)
+    }
+
+    /// Sets the value of a 24 bit register. Changes the
+    /// value of the three underlying 8 bit registers.
+    #[inline]
+    pub fn set24(&mut self, rr: Reg16, value: u32) {
+        self.data[rr as usize +1] = value as u8;
+        self.data[rr as usize] = (value >> 8) as u8;
+        self.data[rr as usize -1] = (value >> 16) as u8;
     }
 
     pub(crate) fn swap(&mut self, rr: Reg16) {
@@ -273,6 +350,16 @@ impl Registers {
         }
     }
 
+    pub(crate) fn update_add24_flags(&mut self, a: u32, b: u32, v: u32) {
+        // Flags are affected by the high order byte.
+        // S, Z and P/V are not updated
+        let xor = ((a ^ b ^ v) >> 16) as u16;
+        self.update_undocumented_flags((v >> 16) as u8);
+        self.put_flag(Flag::C, (xor >> 8 & 1) != 0);
+        self.put_flag(Flag::H, (xor >> 4 & 1) != 0);
+        self.clear_flag(Flag::N);
+    }
+
     pub(crate) fn update_add16_flags(&mut self, a: u32, b: u32, v: u32) {
         if self.mode8080 {
             self.put_flag(Flag::C, (v & 0x10000) != 0);
@@ -286,6 +373,10 @@ impl Registers {
             self.put_flag(Flag::H, (xor >> 4 & 1) != 0);
             self.clear_flag(Flag::N);
         }
+    }
+
+    pub(crate) fn update_arithmetic_flags_24(&mut self, a: u32, b: u32, reference: u32, neg: bool) {
+        self.update_arithmetic_flags((a >> 16) as u16, (b >> 16) as u16, (reference >> 16) as u16, neg, true);
     }
 
     pub(crate) fn update_arithmetic_flags_16(&mut self, a: u32, b: u32, reference: u32, neg: bool) {
@@ -354,18 +445,6 @@ impl Registers {
             self.update_p_flag(reference);
             self.clear_flag(Flag::N);
         }
-    }
-
-    /// Returns the program counter
-    #[inline]
-    pub fn pc(&self) -> u16 {
-        self.pc
-    }
-
-    /// Changes the program counter
-    #[inline]
-    pub fn set_pc(&mut self, value: u16) {
-        self.pc = value;
     }
 
     pub(crate) fn set_interrupts(&mut self, v: bool) {

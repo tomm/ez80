@@ -47,6 +47,29 @@ pub fn build_out_n_a() -> Opcode {
     }
 }
 
+pub fn build_out0_n_r(r: Reg8) -> Opcode {
+    Opcode {
+        name: format!("OUT0 (n), {}", r),
+        action: Box::new(move |env: &mut Environment| {
+            let address = env.advance_pc() as u16;
+            let data = env.state.reg.get8(r);
+            env.port_out(address, data);
+        })
+    }
+}
+
+pub fn build_in0_r_n(r: Reg8) -> Opcode {
+    Opcode {
+        name: format!("IN0 {}, (n)", r),
+        action: Box::new(move |env: &mut Environment| {
+            let address = env.advance_pc() as u16;
+            let data = env.port_in(address);
+            env.state.reg.update_arithmetic_flags(data as u16, data as u16, data as u16, true, false); 
+            env.state.reg.set8(r, data);
+        })
+    }
+}
+
 pub fn build_in_r_c(r: Reg8) -> Opcode {
     Opcode {
         name: format!("IN {}, (C)", r),
@@ -100,7 +123,11 @@ pub fn build_in_block((inc, repeat, postfix) : (bool, bool, &'static str)) -> Op
             let value = env.port_in(address);
             // We won't have IX and IY cases to consider
             env.set_reg(Reg8::_HL, value);
-            env.state.reg.inc_dec16(Reg16::HL, inc);
+            if env.state.is_op_long() {
+                env.state.reg.inc_dec24(Reg16::HL, inc);
+            } else {
+                env.state.reg.inc_dec16(Reg16::HL, inc);
+            }
 
             // TUZD-4.3
             let mut j = env.state.reg.get8(Reg8::C) as u16;
@@ -110,8 +137,8 @@ pub fn build_in_block((inc, repeat, postfix) : (bool, bool, &'static str)) -> Op
 
             if repeat && b != 0 {
                 // Back to redo the instruction
-                let pc = env.state.reg.pc().wrapping_sub(2);
-                env.state.reg.set_pc(pc);
+                let pc = env.wrap_address(env.state.pc(), -2);
+                env.state.set_pc(pc);
             }
                 })
     }
@@ -129,7 +156,11 @@ pub fn build_out_block((inc, repeat, postfix) : (bool, bool, &'static str)) -> O
             // We won't have IX and IY cases to consider
             let value = env.reg8_ext(Reg8::_HL);
             env.port_out(address, value);
-            env.state.reg.inc_dec16(Reg16::HL, inc);
+            if env.state.is_op_long() {
+                env.state.reg.inc_dec24(Reg16::HL, inc);
+            } else {
+                env.state.reg.inc_dec16(Reg16::HL, inc);
+            }
 
             // TUZD-4.3
             let k = value as u16 + env.state.reg.get8(Reg8::L) as u16;
@@ -137,8 +168,8 @@ pub fn build_out_block((inc, repeat, postfix) : (bool, bool, &'static str)) -> O
 
             if repeat && b != 0 {
                 // Back to redo the instruction
-                let pc = env.state.reg.pc().wrapping_sub(2);
-                env.state.reg.set_pc(pc);
+                let pc = env.wrap_address(env.state.pc(), -2);
+                env.state.set_pc(pc);
             }
         })
     }

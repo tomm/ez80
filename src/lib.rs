@@ -21,11 +21,11 @@
 //!    let code = [0x3c, 0xc3, 0x00, 0x00]; // INC A, JP $0000
 //!    let size = code.len();
 //!    for i in 0..size {
-//!        machine.poke(0x0000 + i as u16, code[i]);
+//!        machine.poke(i as u32, code[i]);
 //!    }
 //!
 //!    // Run emulation
-//!    cpu.registers().set_pc(0x0000);
+//!    cpu.state.set_pc(0x0000);
 //!    loop {
 //!        cpu.execute_instruction(&mut machine);
 //!
@@ -45,6 +45,7 @@ mod registers;
 mod state;
 
 
+mod decoder_ez80;
 mod decoder_z80;
 mod decoder_8080;
 mod environment;

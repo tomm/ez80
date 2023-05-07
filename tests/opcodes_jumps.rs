@@ -11,7 +11,7 @@ fn test_djnz_jump() {
 
     cpu.execute_instruction(&mut sys);
     assert_eq!(0x22, cpu.registers().get8(Reg8::B));
-    assert_eq!(0x0008, cpu.registers().pc());
+    assert_eq!(0x0008, cpu.state.pc());
 }
 
 #[test]
@@ -25,7 +25,7 @@ fn test_djnz_no_jump() {
 
     cpu.execute_instruction(&mut sys);
     assert_eq!(0x00, cpu.registers().get8(Reg8::B));
-    assert_eq!(0x0002, cpu.registers().pc());
+    assert_eq!(0x0002, cpu.state.pc());
 }
 
 #[test]
@@ -38,7 +38,7 @@ fn test_jr_z_jump() {
     cpu.registers().set_flag(Flag::Z);
 
     cpu.execute_instruction(&mut sys);
-    assert_eq!(0xFFFE, cpu.registers().pc());
+    assert_eq!(0xFFFE, cpu.state.pc());
 }
 
 #[test]
@@ -51,7 +51,7 @@ fn test_jp() {
     sys.poke(0x0002, 0x20);
     
     cpu.execute_instruction(&mut sys);
-    assert_eq!(0x2000, cpu.registers().pc());
+    assert_eq!(0x2000, cpu.state.pc());
 }
 
 #[test]
@@ -65,7 +65,7 @@ fn test_call() {
     
  
     cpu.execute_instruction(&mut sys);
-    assert_eq!(0x2000, cpu.registers().pc());
+    assert_eq!(0x2000, cpu.state.pc());
     //assert_eq!(0x0003, cpu.env.pop());
 }
 
@@ -80,7 +80,7 @@ fn test_call_z_jump() {
     cpu.registers().set_flag(Flag::Z);
      
     cpu.execute_instruction(&mut sys);
-    assert_eq!(0x2000, cpu.registers().pc());
+    assert_eq!(0x2000, cpu.state.pc());
     //assert_eq!(0x0003, cpu.env.pop());
 }
 
@@ -95,7 +95,7 @@ fn test_call_z_no_jump() {
     cpu.registers().clear_flag(Flag::Z);
      
     cpu.execute_instruction(&mut sys);
-    assert_eq!(0x0003, cpu.registers().pc());
+    assert_eq!(0x0003, cpu.state.pc());
 }
 
 #[test]
@@ -106,7 +106,7 @@ fn test_rst() {
     sys.poke(0x0000, 0xff);  // RST 38h    
  
     cpu.execute_instruction(&mut sys);
-    assert_eq!(0x0038, cpu.registers().pc());
+    assert_eq!(0x0038, cpu.state.pc());
     //assert_eq!(0x0001, cpu.env.pop());
 }
 
@@ -122,7 +122,7 @@ fn test_call_ret() {
     sys.poke(0x2000, 0xc9);  // RET
     
     cpu.execute_instruction(&mut sys);
-    assert_eq!(0x2000, cpu.registers().pc());
+    assert_eq!(0x2000, cpu.state.pc());
      cpu.execute_instruction(&mut sys);
-    assert_eq!(0x0003, cpu.registers().pc());
+    assert_eq!(0x0003, cpu.state.pc());
 }

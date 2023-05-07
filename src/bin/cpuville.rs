@@ -27,11 +27,11 @@ fn main() {
     // Load program
     let code = TINY_BASIC;
     for (i, e) in code.iter().enumerate() {
-        machine.poke(i as u16, *e);
+        machine.poke(i as u32, *e);
     }
 
     // Init
-    cpu.registers().set_pc(0x0000);
+    cpu.state.set_pc(0x0000);
     machine.in_values[3] = 1; // TX Ready
 
     loop {
@@ -114,11 +114,11 @@ impl VilleMachine {
 }
 
 impl Machine for VilleMachine {
-    fn peek(&self, address: u16) -> u8 {
+    fn peek(&self, address: u32) -> u8 {
         self.mem[address as usize]
     }
 
-    fn poke(&mut self, address: u16, value: u8) {
+    fn poke(&mut self, address: u32, value: u8) {
         self.mem[address as usize] = value;
     }
 

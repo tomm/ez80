@@ -9,6 +9,7 @@ use super::opcode_ld::*;
 use super::operators::*;
 use super::registers::*;
 use super::environment::*;
+use super::state::*;
 
 /* See
     http://www.z80.info/decoding.htm
@@ -16,29 +17,40 @@ use super::environment::*;
     http://z80-heaven.wikidot.com/instructions-set
 */
 
-pub struct DecoderZ80 {
+pub struct DecoderEZ80 {
     no_prefix: [Option<Opcode>; 256],
     prefix_cb: [Option<Opcode>; 256],
     prefix_cb_indexed: [Option<Opcode>; 256],
     prefix_ed: [Option<Opcode>; 256],
+    // prefix_dd & prefix_fd are only used for a few ez80 instructions.
+    // the rest of those prefixes are handled by the environment.index hack
+    prefix_dd: [Option<Opcode>; 256],
+    prefix_fd: [Option<Opcode>; 256],
     has_displacement: [bool; 256],
 }
 
-impl Decoder for DecoderZ80 {
+impl Decoder for DecoderEZ80 {
     fn decode(&self, env: &mut Environment) -> &Opcode {
         let mut b0 = env.advance_pc();
 
         // Process prefixes even if reapeated
-        while b0 == 0xdd || b0 == 0xfd {
-            if b0 == 0xdd {
-                // DD prefix
-                env.set_index(Reg16::IX);
-                b0 = env.advance_pc()
-            } else {
-                // FD prefix
-                env.set_index(Reg16::IY);
-                b0 = env.advance_pc()
+        loop {
+            match b0 {
+                0x40 => env.state.sz_prefix = SizePrefix::SIS,
+                0x49 => env.state.sz_prefix = SizePrefix::LIS,
+                0x52 => env.state.sz_prefix = SizePrefix::SIL,
+                0x5B => env.state.sz_prefix = SizePrefix::LIL,
+                _ => break,
             }
+            b0 = env.advance_pc();
+        }
+        loop {
+            match b0 {
+                0xdd => env.set_index(Reg16::IX),
+                0xfd => env.set_index(Reg16::IY),
+                _ => break,
+            }
+            b0 = env.advance_pc();
         }
         
         let opcode = match b0 {
@@ -53,6 +65,15 @@ impl Decoder for DecoderZ80 {
             0xed => {
                 env.clear_index(); // With ed, the current prefix is ignored
                 &self.prefix_ed[env.advance_pc() as usize]
+            },
+            // XXX hack. should put all dd, df opcodes in this table
+            0x0f | 0x1f | 0x2f | 0x07 | 0x17 | 0x27 | 0x31 | 0x37 | 0x86
+                | 0x96 | 0xa6 | 0xb6 | 0x8e | 0x9e | 0xae | 0xbe if env.is_alt_index() => {
+                match env.get_index() {
+                    Reg16::IX => &self.prefix_dd[b0 as usize],
+                    Reg16::IY => &self.prefix_fd[b0 as usize],
+                    _ => panic!("bug")
+                }
             },
             _ => {
                 if self.has_displacement[b0 as usize] && env.is_alt_index() {
@@ -70,10 +91,10 @@ impl Decoder for DecoderZ80 {
     }
 }
 
-impl DecoderZ80 {
-    pub fn new() -> DecoderZ80 {
+impl DecoderEZ80 {
+    pub fn new() -> DecoderEZ80 {
 
-        let mut decoder = DecoderZ80 {
+        let mut decoder = DecoderEZ80 {
             no_prefix: [
                 None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
                 None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
@@ -128,7 +149,43 @@ impl DecoderZ80 {
                 None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
                 None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
             ],
+            prefix_dd: [
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+            ],
             prefix_ed: [
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+            ],
+            prefix_fd: [
                 None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
                 None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
                 None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
@@ -152,8 +209,72 @@ impl DecoderZ80 {
         decoder.load_prefix_cb();
         decoder.load_prefix_cb_indexed();
         decoder.load_prefix_ed();
+        decoder.load_prefix_dd();
+        decoder.load_prefix_fd();
         decoder.load_has_displacement();
         decoder
+    }
+
+    /* Only some ez80 instructions are implemented here. Most use state.index hack */
+    fn load_prefix_dd(&mut self) {
+        for c in 0..=255 {
+            let opcode = match c {
+                0x07 => Some(build_ld_rr_idx_disp(Reg16::BC, Reg16::IX)),
+                0x17 => Some(build_ld_rr_idx_disp(Reg16::DE, Reg16::IX)),
+                0x27 => Some(build_ld_rr_idx_disp(Reg16::HL, Reg16::IX)),
+
+                0x31 => Some(build_ld_rr_idx_disp(Reg16::IY, Reg16::IX)),
+                0x37 => Some(build_ld_rr_idx_disp(Reg16::IX, Reg16::IX)),
+
+                0x0f => Some(build_ld_idx_disp_rr(Reg16::IX, Reg16::BC)),
+                0x1f => Some(build_ld_idx_disp_rr(Reg16::IX, Reg16::DE)),
+                0x2f => Some(build_ld_idx_disp_rr(Reg16::IX, Reg16::HL)),
+
+                0x86 => Some(build_operator_a_idx_offset(Reg16::IX, (operator_add, "ADD"))),
+                0x96 => Some(build_operator_a_idx_offset(Reg16::IX, (operator_sub, "SUB"))),
+                0xa6 => Some(build_operator_a_idx_offset(Reg16::IX, (operator_and, "ADD"))),
+                0xb6 => Some(build_operator_a_idx_offset(Reg16::IX, (operator_or, "OR"))),
+
+                0x8e => Some(build_operator_a_idx_offset(Reg16::IX, (operator_adc, "ADC"))),
+                0x9e => Some(build_operator_a_idx_offset(Reg16::IX, (operator_sbc, "SBC"))),
+                0xae => Some(build_operator_a_idx_offset(Reg16::IX, (operator_xor, "XOR"))),
+                0xbe => Some(build_operator_a_idx_offset(Reg16::IX, (operator_cp, "CP"))),
+
+                _ => None
+            };
+            self.prefix_dd[c as usize] = opcode;
+        }
+    }
+
+    /* Only some ez80 instructions are implemented here. Most use state.index hack */
+    fn load_prefix_fd(&mut self) {
+        for c in 0..=255 {
+            let opcode = match c {
+                0x07 => Some(build_ld_rr_idx_disp(Reg16::BC, Reg16::IY)),
+                0x17 => Some(build_ld_rr_idx_disp(Reg16::DE, Reg16::IY)),
+                0x27 => Some(build_ld_rr_idx_disp(Reg16::HL, Reg16::IY)),
+
+                0x31 => Some(build_ld_rr_idx_disp(Reg16::IY, Reg16::IY)),
+                0x37 => Some(build_ld_rr_idx_disp(Reg16::IX, Reg16::IY)),
+
+                0x0f => Some(build_ld_idx_disp_rr(Reg16::IY, Reg16::BC)),
+                0x1f => Some(build_ld_idx_disp_rr(Reg16::IY, Reg16::DE)),
+                0x2f => Some(build_ld_idx_disp_rr(Reg16::IY, Reg16::HL)),
+
+                0x86 => Some(build_operator_a_idx_offset(Reg16::IY, (operator_add, "ADD"))),
+                0x96 => Some(build_operator_a_idx_offset(Reg16::IY, (operator_sub, "SUB"))),
+                0xa6 => Some(build_operator_a_idx_offset(Reg16::IY, (operator_and, "ADD"))),
+                0xb6 => Some(build_operator_a_idx_offset(Reg16::IY, (operator_or, "OR"))),
+
+                0x8e => Some(build_operator_a_idx_offset(Reg16::IY, (operator_adc, "ADC"))),
+                0x9e => Some(build_operator_a_idx_offset(Reg16::IY, (operator_sbc, "SBC"))),
+                0xae => Some(build_operator_a_idx_offset(Reg16::IY, (operator_xor, "XOR"))),
+                0xbe => Some(build_operator_a_idx_offset(Reg16::IY, (operator_cp, "CP"))),
+
+                _ => None
+            };
+            self.prefix_fd[c as usize] = opcode;
+        }
     }
 
     fn load_no_prefix(&mut self) {
@@ -314,7 +435,27 @@ impl DecoderZ80 {
         for c in 0..=255 {
             let p = DecodingHelper::parts(c);
             let opcode = match p.x {
-                0 | 3 => Some(build_noni_nop()), // Invalid instruction NONI + NOP
+                0 => match p.z {
+                    // XXX todo p.y==6 is not valid for in0
+                    0 => Some(build_in0_r_n(R[p.y])),
+                    1 => Some(build_out0_n_r(R[p.y])),
+                    2 => match p.p {
+                        0 | 1 | 2 => Some(build_lea_rr_ind_offset(RP[p.p], Reg16::IX)),
+                        3 => Some(build_lea_rr_ind_offset(Reg16::IX, Reg16::IX)),
+                        _ => Some(build_noni_nop()), // Invalid instruction NONI + NOP
+                    },
+                    3 => match p.p {
+                        0 | 1 | 2 => Some(build_lea_rr_ind_offset(RP[p.p], Reg16::IY)),
+                        3 => Some(build_lea_rr_ind_offset(Reg16::IY, Reg16::IY)),
+                        _ => Some(build_noni_nop()), // Invalid instruction NONI + NOP
+                    },
+                    4 => Some(build_tst_a_r(R[p.y])),
+                    7 => match p.p {
+                        0 | 1 | 2 => Some(build_ld_rr_ind_hl(RP[p.p])),
+                        _ => Some(build_noni_nop()), // Invalid instruction NONI + NOP
+                    },
+                    _ => Some(build_noni_nop()), // Invalid instruction NONI + NOP
+                },
                 1 => match p.z {
                     0 => match p.y {
                         6 => Some(build_in_0_c()), // IN (C)
@@ -334,12 +475,26 @@ impl DecoderZ80 {
                         1 => Some(build_ld_rr_pnn(RP[p.p], false)), // LD rr, (nn) -- 16 bit loading
                         _ => panic!("Unreachable")
                     },
-                    4 => Some(build_neg()), // NEG
+                    4 => match p.y {
+                        1 | 3 | 5 => Some(build_mlt_rr(RP[p.p])),
+                        2 => Some(build_lea_rr_ind_offset(Reg16::IX, Reg16::IY)),
+                        4 => Some(build_tst_a_n()),
+                        _ => Some(build_neg()), // NEG
+                    },
                     5 => match p.y {
                         1 => Some(build_reti()), // RETI
+                        2 => Some(build_lea_rr_ind_offset(Reg16::IY, Reg16::IX)),
+                        4 => Some(build_pea(Reg16::IX)),
+                        5 => Some(build_ld_mb_a()),
+                        7 => Some(build_stmix()),
                         _ => Some(build_retn())  // RETN
                     }
-                    6 => Some(build_im(IM[p.y])), // IM #
+                    6 => match p.y {
+                        4 => Some(build_pea(Reg16::IY)),
+                        5 => Some(build_ld_a_mb()),
+                        7 => Some(build_rsmix()),
+                        _ => Some(build_im(IM[p.y])) // IM #
+                    }
                     7 => match p.y {
                         0 => Some(build_ld_r_r(Reg8::I, Reg8::A, true)), // LD I, A
                         1 => Some(build_ld_r_r(Reg8::R, Reg8::A, true)), // LD R, A
@@ -366,6 +521,7 @@ impl DecoderZ80 {
                     } else {
                         Some(build_noni_nop()) // NONI + NOP
                     },
+                3 => Some(build_noni_nop()), // Invalid instruction NONI + NOP
                 _ => panic!("Unreachable")
             };
 
@@ -476,3 +632,12 @@ pub const BLI_A: [(bool, bool, &str); 4] = [
     (true,  true, "IR"),
     (false, true, "DR")
 ];
+
+pub fn build_exploding_nop(name: &'static str) -> Opcode {
+    Opcode {
+        name: "NOTIMPLENTED".to_string(),
+        action: Box::new(move |_: &mut Environment| {
+            panic!("{} not implemented", name);
+        })
+    }
+}

@@ -21,7 +21,7 @@ fn cpu_test(mut cpu: Cpu) {
     let code = CODE;
     let size = code.len();
     for i in 0..size {
-        machine.poke(0x100 + i as u16, code[i]);
+        machine.poke(0x100 + i as u32, code[i]);
     }
 
     /*
@@ -33,10 +33,10 @@ fn cpu_test(mut cpu: Cpu) {
     //let code = [0xD3, 0x00, 0xC9];
     let code = [0xC9];
     for i in 0..code.len() {
-        machine.poke(5 + i as u16, code[i]);
+        machine.poke(5 + i as u32, code[i]);
     }
 
-    cpu.registers().set_pc(0x100);
+    cpu.state.set_pc(0x100);
     let trace = false;
     cpu.set_trace(trace);
     let mut msg = String::new();
@@ -44,18 +44,18 @@ fn cpu_test(mut cpu: Cpu) {
         cpu.execute_instruction(&mut machine);
 
         // Avoid tracing the long loop
-        if cpu.registers().pc() == 0x31b3 {
+        if cpu.state.pc() == 0x31b3 {
             cpu.set_trace(false);
-        } else if cpu.registers().pc() == 0x31b5 {
+        } else if cpu.state.pc() == 0x31b5 {
             cpu.set_trace(trace);
         }
 
-        if cpu.registers().pc() == 0x0000 {
+        if cpu.state.pc() == 0x0000 {
             println!("");
             break;
         }
 
-        if cpu.registers().pc() == 0x0005 {
+        if cpu.state.pc() == 0x0005 {
             match cpu.registers().get8(Reg8::C) {
                 2 => {
                     // C_WRITE

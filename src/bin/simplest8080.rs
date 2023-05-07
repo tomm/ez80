@@ -10,11 +10,11 @@ fn main() {
     //      let code = include_bytes!("XXXX.rom");
     let code = [0x3c, 0xc3, 0x00, 0x00]; // INC A, JP $0000
     for (i, e) in code.iter().enumerate() {
-        machine.poke(i as u16, *e);
+        machine.poke(i as u32, *e);
     }
 
     // Run emulation
-    cpu.registers().set_pc(0x0000);
+    cpu.state.set_pc(0x0000);
     loop {
         cpu.execute_instruction(&mut machine);
 

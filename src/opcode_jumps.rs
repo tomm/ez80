@@ -42,9 +42,9 @@ pub fn build_jr_eq((flag, value, name): (Flag, bool, &str)) -> Opcode {
 
 
 fn relative_jump(env: &mut Environment, offset: u8) {
-    let mut pc = env.state.reg.pc();
-    pc = pc.wrapping_add(offset as i8 as i16 as u16);
-    env.state.reg.set_pc(pc);
+    let mut pc = env.state.pc();
+    pc = env.wrap_address(pc, offset as i8 as i32);
+    env.state.set_pc(pc);
 }
 
 // Absolute jumps
@@ -52,8 +52,9 @@ pub fn build_jp_unconditional() -> Opcode {
     Opcode {
         name: "JP nn".to_string(),
         action: Box::new(move |env: &mut Environment| {
-            let address = env.advance_immediate16();
-            env.state.reg.set_pc(address);
+            let address = env.advance_immediate_16mbase_or_24();
+            env.state.set_pc(address);
+            env.state.reg.adl = env.state.is_op_long();
         })
     }
 }
@@ -62,9 +63,9 @@ pub fn build_jp_eq((flag, value, name): (Flag, bool, &str)) -> Opcode {
     Opcode {
         name: format!("JP {}, nn", name),
         action: Box::new(move |env: &mut Environment| {
-            let address = env.advance_immediate16();
+            let address = env.advance_immediate_16mbase_or_24();
             if env.state.reg.get_flag(flag) == value {
-                env.state.reg.set_pc(address);
+                env.state.set_pc(address);
             }
         })
     }
@@ -76,7 +77,7 @@ pub fn build_jp_hl() -> Opcode {
         action: Box::new(move |env: &mut Environment| {
             // Note: no displacement added to the index
             let address = env.index_value();
-            env.state.reg.set_pc(address);
+            env.state.set_pc(address);
         })
     }
 }
@@ -86,7 +87,7 @@ pub fn build_call() -> Opcode {
     Opcode {
         name: "CALL nn".to_string(),
         action: Box::new(move |env: &mut Environment| {
-            let address = env.advance_immediate16();
+            let address = env.advance_immediate_16mbase_or_24();
             env.subroutine_call(address);
         })
     }
@@ -96,7 +97,7 @@ pub fn build_call_eq((flag, value, name): (Flag, bool, &str)) -> Opcode {
     Opcode {
         name: format!("CALL {}, nn", name),
         action: Box::new(move |env: &mut Environment| {
-            let address = env.advance_immediate16();
+            let address = env.advance_immediate_16mbase_or_24();
             if env.state.reg.get_flag(flag) == value {
                 env.subroutine_call(address);
             }
@@ -108,7 +109,8 @@ pub fn build_rst(d: u8) -> Opcode {
     Opcode {
         name: format!("RST {:02x}h", d),
         action: Box::new(move |env: &mut Environment| {
-            let address = d as u16;
+            // -TM- XXX is this right?
+            let address = d as u32;
             env.subroutine_call(address);
         })
     }

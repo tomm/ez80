@@ -5,7 +5,7 @@ fn test_disasm_z80(code: &[u8], expected: &str) {
     let mut cpu = Cpu::new();
 
     for i in 0..code.len() {
-        sys.poke(i as u16, code[i]);
+        sys.poke(i as u32, code[i]);
     }
 
     let disasm = cpu.disasm_instruction(&mut sys);
