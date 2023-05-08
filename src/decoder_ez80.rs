@@ -66,7 +66,7 @@ impl Decoder for DecoderEZ80 {
                 env.clear_index(); // With ed, the current prefix is ignored
                 &self.prefix_ed[env.advance_pc() as usize]
             },
-            // XXX hack. should put all dd, df opcodes in this table
+            // XXX hack. should put all dd, fd opcodes in this table
             0x0f | 0x1f | 0x2f | 0x07 | 0x17 | 0x27 | 0x31 | 0x37 | 0x86
                 | 0x96 | 0xa6 | 0xb6 | 0x8e | 0x9e | 0xae | 0xbe if env.is_alt_index() => {
                 match env.get_index() {

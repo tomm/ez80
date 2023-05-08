@@ -152,15 +152,12 @@ impl <'a> Environment<'_> {
     }
 
     pub fn subroutine_call(&mut self, address: u32) {
-        println!("CALL ${:04x}", address);
         self.push(self.state.pc());
         self.state.set_pc(address);
     }
 
     pub fn subroutine_return(&mut self) {
-        //println!("RETURN");
         let pc = self.pop();
-        if pc == 0 { panic!("reset!") };
         self.state.set_pc(pc);
     }
 
@@ -211,9 +208,9 @@ impl <'a> Environment<'_> {
     pub fn index_address(&self) -> u32 {
         // Pseudo register (HL), (IX+d), (IY+d)
         let address = if self.state.is_op_long() {
-            self.state.reg.get16_mbase(self.state.index)
-        } else {
             self.state.reg.get24(self.state.index)
+        } else {
+            self.state.reg.get16_mbase(self.state.index)
         };
         if self.is_alt_index() {
             (address as i32).wrapping_add(self.state.displacement as i32) as u32
