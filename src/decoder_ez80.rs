@@ -450,8 +450,9 @@ impl DecoderEZ80 {
                         _ => Some(build_noni_nop()), // Invalid instruction NONI + NOP
                     },
                     4 => Some(build_tst_a_r(R[p.y])),
-                    7 => match p.p {
-                        0 | 1 | 2 => Some(build_ld_rr_ind_hl(RP[p.p])),
+                    7 => match p.y {
+                        0 | 2 | 4 => Some(build_ld_rr_ind_hl(RP[p.p])),
+                        1 | 3 | 5 => Some(build_ld_ind_hl_rr(RP[p.p])),
                         _ => Some(build_noni_nop()), // Invalid instruction NONI + NOP
                     },
                     _ => Some(build_noni_nop()), // Invalid instruction NONI + NOP

@@ -361,3 +361,20 @@ pub fn build_ld_rr_ind_hl(dest: Reg16) -> Opcode {
         })
     }
 }
+
+pub fn build_ld_ind_hl_rr(src: Reg16) -> Opcode {
+    Opcode {
+        name: format!("LD (HL), {:?}", src),
+        action: Box::new(move |env: &mut Environment| {
+            if env.state.is_op_long() {
+                let address = env.state.reg.get24(Reg16::HL);
+                let value = env.state.reg.get24(src);
+                env.poke24(address, value);
+            } else {
+                let address = env.state.reg.get16_mbase(Reg16::HL);
+                let value = env.state.reg.get16(src);
+                env.poke16(address, value);
+            }
+        })
+    }
+}

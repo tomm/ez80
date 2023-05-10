@@ -103,3 +103,5 @@ mod tests {
         assert_eq!(V, m.peek(A));
     }
 }
+
+pub use crate::agon_machine::AgonMachine;
