@@ -1,6 +1,7 @@
 use crate::Machine;
 use crate::Environment;
 use crate::Cpu;
+use crate::registers::*;
 use std::sync::mpsc::{Sender, Receiver};
 use std::sync::mpsc;
 
@@ -49,6 +50,7 @@ impl Machine for AgonMachine {
             // UART_LSR_ETX		EQU 	%40 ; Transmit empty (can send)
             // UART_LSR_RDY		EQU	%01		; Data ready (can receive)
         } else if address == 0x81 /* timer0 low byte */ {
+            std::thread::sleep(std::time::Duration::from_millis(10));
             0x0
         } else if address == 0x82 /* timer0 high byte */ {
             0x0
@@ -109,65 +111,11 @@ impl AgonMachine {
         cpu.state.set_pc(0x0000);
         //for _ in 0..3600 {
         loop {
-            //machine.poke(0xBC504, 1); // _gp variable
-            //if cpu.state.pc() == 0x0 { println!("_reset()") };
-            /*
-            if cpu.state.pc() == 0x0d96 { println!("main()") };
-            if cpu.state.pc() == 0x0d68 { println!("init_interrupts()") };
-            if cpu.state.pc() == 0x0847 { println!("init_rtc()") };
-            if cpu.state.pc() == 0x349d { println!("init_spi()") };
-            if cpu.state.pc() == 0xa92a { println!("init_UART0()") };
-            if cpu.state.pc() == 0xa948 { println!("init_UART1()") };
-            if cpu.state.pc() == 0x0c80 { println!("wait_ESP32()") };
-            if cpu.state.pc() == 0xa966 { println!("open_UART0()") };
-            if cpu.state.pc() == 0x2b7f { println!("init_timer0()") };
-            if cpu.state.pc() == 0x2c36 { println!("enable_timer0()") };
-            if cpu.state.pc() == 0xae16 { println!("__print_sendstring()") };
-            if cpu.state.pc() == 0x0909 {
-                println!("putch({})", machine.peek(cpu.state.reg.get24(Reg16::SP)+3));
-            };
-            if cpu.state.pc() == 0x08d4 {
-                println!("UART0_serial_PUTCH({})", cpu.state.reg.get8(Reg8::A));
-            };
-            if cpu.state.pc() == 0x084e { println!("UART0_wait_CTS()") };
-            if cpu.state.pc() == 0x0860 { println!("UART0_serial_TX()") };
-            if cpu.state.pc() == 0x063a { println!("wait_timer0()") };
-            if cpu.state.pc() == 0xb162 { println!("uitoa()") };
-            if cpu.state.pc() == 0xb7b5 { println!("itol()") };
-            if cpu.state.pc() == 0xb09c { println!("strlen()") };
-            if cpu.state.pc() == 0xb184 { println!("ultoa()") };
-            if cpu.state.pc() == 0xb418 { println!("lcmpzero()") };
-            if cpu.state.pc() == 0xb6e0 { println!("_u_reverse()") };
-            if cpu.state.pc() == 0xb7bc { println!("lcmpu()") };
-            if cpu.state.pc() == 0xadfe { println!("setflag()") };
-            if cpu.state.pc() == 0xb7d2 { println!("case8D()") };
-            if cpu.state.pc() == 0x2c92 { println!("wait_VDP()") };
-            if cpu.state.pc() == 0xb8bd { println!("_lremu()") };
-            if cpu.state.pc() == 0xb1e3 { println!("_ldvrmu()") };
-            if cpu.state.pc() == 0xb12c { println!("_ldivu()") };
-            if cpu.state.pc() == 0xb528 { println!("_print_send()") };
-            if cpu.state.pc() == 0xb8cd { println!("_print_putch()") };
-            if cpu.state.pc() == 0xb815 { println!("_indcall()") };
-            if cpu.state.pc() == 0xb024 { println!("_print_uputch()") };
-            if cpu.state.pc() == 0x72f7 { println!("_f_mount()") };
-            */
-            //if cpu.state.pc() == 0x72f7 { println!("_f_mount()") };
-            //if cpu.state.pc() == 0x923 { println!("getch()") };
-            if cpu.state.instructions_executed % 10000 == 0 {
+            if cpu.state.instructions_executed % 1024 == 0 {
                 let mut env = Environment::new(&mut cpu.state, self);
                 env.interrupt(0x18); // uart0_handler
             }
-            //if cpu.state.pc() == 0x2657 {
-                //println!("waitKey()");
-            //};
-            //if cpu.state.pc() >= 0x0909 { println!("_enable_timer0") };
-            //if (cpu.state.pc() >= 0x0da3 && cpu.state.pc() <= 0xda3+0x200) { // trace in _main
-            //if (cpu.state.pc() >= 0x0c80 && cpu.state.pc() <= 0xc80+0x80) { // trace in _wait_ESP32
-            //if (cpu.state.pc() >= 0x0909 && cpu.state.pc() <= 0x909+0x80) { // trace in _enable_timer0
-            //if (cpu.state.pc() >= 0x0860 && cpu.state.pc() <= 0x8c0) { // trace in _enable_timer0
-            //if (cpu.state.pc() >= 0x2b7f && cpu.state.pc() <= 0x2b7f+0x126) { // trace in _init_timer0
-            //if cpu.state.pc() >= 0x833 && cpu.state.pc() <= 0x833+0x40 { // trace in _set_vector
-            //if true {
+            //if cpu.state.pc() >= 0xb06a && cpu.state.pc() <= 0xb06a+0x80 { // trace in toupper
             if false {
                cpu.set_trace(true);
             }

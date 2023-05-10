@@ -24,11 +24,12 @@ impl <'a> Environment<'_> {
     }
 
     pub fn interrupt(&mut self, number: u32) -> () {
-        //println!("interrupt {:x}", number);
-        let vector_address = ((self.state.reg.get8(Reg8::I) as u32) << 8) + number;
-        let vector = self.peek16(vector_address) as u32;
+        if self.state.reg.get_iff1() {
+            let vector_address = ((self.state.reg.get8(Reg8::I) as u32) << 8) + number;
+            let vector = self.peek16(vector_address) as u32;
 
-        self.subroutine_call(vector);
+            self.subroutine_call(vector);
+        }
     }
 
     pub fn peek(&self, address: u32) -> u8 {

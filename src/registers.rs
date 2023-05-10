@@ -447,6 +447,10 @@ impl Registers {
         }
     }
 
+    pub(crate) fn get_iff1(&self) -> bool {
+        self.iff1
+    }
+
     pub(crate) fn set_interrupts(&mut self, v: bool) {
         self.iff1 = v;
         self.iff2 = v;
