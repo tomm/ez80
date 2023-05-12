@@ -320,6 +320,7 @@ pub fn build_ld_idx_disp_rr(index_reg: Reg16, src: Reg16) -> Opcode {
                 env.poke24(address, value);
             } else {
                 let value = env.state.reg.get16(src);
+                // this is wrong XXX only wrap the 16-bit part
                 let address = env.state.reg.get16_mbase(index_reg).wrapping_add(imm);
                 env.poke16(address, value);
             }

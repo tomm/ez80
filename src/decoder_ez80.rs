@@ -67,7 +67,7 @@ impl Decoder for DecoderEZ80 {
                 &self.prefix_ed[env.advance_pc() as usize]
             },
             // XXX hack. should put all dd, fd opcodes in this table
-            0x0f | 0x1f | 0x2f | 0x07 | 0x17 | 0x27 | 0x31 | 0x37 | 0x86
+            0x0f | 0x1f | 0x2f | 0x07 | 0x17 | 0x27 | 0x31 | 0x37 | 0x3e | 0x3f | 0x86
                 | 0x96 | 0xa6 | 0xb6 | 0x8e | 0x9e | 0xae | 0xbe if env.is_alt_index() => {
                 match env.get_index() {
                     Reg16::IX => &self.prefix_dd[b0 as usize],
@@ -220,24 +220,22 @@ impl DecoderEZ80 {
         for c in 0..=255 {
             let opcode = match c {
                 0x07 => Some(build_ld_rr_idx_disp(Reg16::BC, Reg16::IX)),
+                0x0f => Some(build_ld_idx_disp_rr(Reg16::IX, Reg16::BC)),
                 0x17 => Some(build_ld_rr_idx_disp(Reg16::DE, Reg16::IX)),
+                0x1f => Some(build_ld_idx_disp_rr(Reg16::IX, Reg16::DE)),
                 0x27 => Some(build_ld_rr_idx_disp(Reg16::HL, Reg16::IX)),
-
+                0x2f => Some(build_ld_idx_disp_rr(Reg16::IX, Reg16::HL)),
                 0x31 => Some(build_ld_rr_idx_disp(Reg16::IY, Reg16::IX)),
                 0x37 => Some(build_ld_rr_idx_disp(Reg16::IX, Reg16::IX)),
-
-                0x0f => Some(build_ld_idx_disp_rr(Reg16::IX, Reg16::BC)),
-                0x1f => Some(build_ld_idx_disp_rr(Reg16::IX, Reg16::DE)),
-                0x2f => Some(build_ld_idx_disp_rr(Reg16::IX, Reg16::HL)),
-
+                0x3e => Some(build_ld_idx_disp_rr(Reg16::IX, Reg16::IY)),
+                0x3f => Some(build_ld_idx_disp_rr(Reg16::IX, Reg16::IX)),
                 0x86 => Some(build_operator_a_idx_offset(Reg16::IX, (operator_add, "ADD"))),
-                0x96 => Some(build_operator_a_idx_offset(Reg16::IX, (operator_sub, "SUB"))),
-                0xa6 => Some(build_operator_a_idx_offset(Reg16::IX, (operator_and, "ADD"))),
-                0xb6 => Some(build_operator_a_idx_offset(Reg16::IX, (operator_or, "OR"))),
-
                 0x8e => Some(build_operator_a_idx_offset(Reg16::IX, (operator_adc, "ADC"))),
+                0x96 => Some(build_operator_a_idx_offset(Reg16::IX, (operator_sub, "SUB"))),
                 0x9e => Some(build_operator_a_idx_offset(Reg16::IX, (operator_sbc, "SBC"))),
+                0xa6 => Some(build_operator_a_idx_offset(Reg16::IX, (operator_and, "ADD"))),
                 0xae => Some(build_operator_a_idx_offset(Reg16::IX, (operator_xor, "XOR"))),
+                0xb6 => Some(build_operator_a_idx_offset(Reg16::IX, (operator_or, "OR"))),
                 0xbe => Some(build_operator_a_idx_offset(Reg16::IX, (operator_cp, "CP"))),
 
                 _ => None
@@ -251,24 +249,22 @@ impl DecoderEZ80 {
         for c in 0..=255 {
             let opcode = match c {
                 0x07 => Some(build_ld_rr_idx_disp(Reg16::BC, Reg16::IY)),
+                0x0f => Some(build_ld_idx_disp_rr(Reg16::IY, Reg16::BC)),
                 0x17 => Some(build_ld_rr_idx_disp(Reg16::DE, Reg16::IY)),
+                0x1f => Some(build_ld_idx_disp_rr(Reg16::IY, Reg16::DE)),
                 0x27 => Some(build_ld_rr_idx_disp(Reg16::HL, Reg16::IY)),
-
+                0x2f => Some(build_ld_idx_disp_rr(Reg16::IY, Reg16::HL)),
                 0x31 => Some(build_ld_rr_idx_disp(Reg16::IY, Reg16::IY)),
                 0x37 => Some(build_ld_rr_idx_disp(Reg16::IX, Reg16::IY)),
-
-                0x0f => Some(build_ld_idx_disp_rr(Reg16::IY, Reg16::BC)),
-                0x1f => Some(build_ld_idx_disp_rr(Reg16::IY, Reg16::DE)),
-                0x2f => Some(build_ld_idx_disp_rr(Reg16::IY, Reg16::HL)),
-
+                0x3e => Some(build_ld_idx_disp_rr(Reg16::IY, Reg16::IY)),
+                0x3f => Some(build_ld_idx_disp_rr(Reg16::IY, Reg16::IX)),
                 0x86 => Some(build_operator_a_idx_offset(Reg16::IY, (operator_add, "ADD"))),
-                0x96 => Some(build_operator_a_idx_offset(Reg16::IY, (operator_sub, "SUB"))),
-                0xa6 => Some(build_operator_a_idx_offset(Reg16::IY, (operator_and, "ADD"))),
-                0xb6 => Some(build_operator_a_idx_offset(Reg16::IY, (operator_or, "OR"))),
-
                 0x8e => Some(build_operator_a_idx_offset(Reg16::IY, (operator_adc, "ADC"))),
+                0x96 => Some(build_operator_a_idx_offset(Reg16::IY, (operator_sub, "SUB"))),
                 0x9e => Some(build_operator_a_idx_offset(Reg16::IY, (operator_sbc, "SBC"))),
+                0xa6 => Some(build_operator_a_idx_offset(Reg16::IY, (operator_and, "ADD"))),
                 0xae => Some(build_operator_a_idx_offset(Reg16::IY, (operator_xor, "XOR"))),
+                0xb6 => Some(build_operator_a_idx_offset(Reg16::IY, (operator_or, "OR"))),
                 0xbe => Some(build_operator_a_idx_offset(Reg16::IY, (operator_cp, "CP"))),
 
                 _ => None
