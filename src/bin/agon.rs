@@ -96,7 +96,7 @@ fn main() {
     });
 
     let mut start_time = Some(std::time::SystemTime::now());
-    let mut commands = vec!["CAT\r", "CREDITS\r"];
+    let mut commands = vec!["run\r", "load helloworld.bin\r"];
 
     loop {
         if !handle_vdp(&tx_VDP2EZ80, &rx_EZ802VDP) {

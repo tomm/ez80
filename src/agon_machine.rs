@@ -4,6 +4,8 @@ use crate::Cpu;
 use crate::registers::*;
 use std::sync::mpsc::{Sender, Receiver};
 use std::sync::mpsc;
+use std::collections::HashMap;
+use std::io::{ prelude::*, Seek, SeekFrom, Read };
 
 const ROM_SIZE: usize = 0x40000; // 256 KiB
 const RAM_SIZE: usize = 0x80000; // 512 KiB
@@ -13,7 +15,10 @@ pub struct AgonMachine {
     mem: [u8; MEM_SIZE],
     tx: Sender<u8>,
     rx: Receiver<u8>,
-    rx_buf: Option<u8>
+    rx_buf: Option<u8>,
+    // map from MOS fatfs FIL struct ptr to rust File handle
+    open_files: HashMap<u32, std::fs::File>,
+    enable_hostfs: bool
 }
 
 impl Machine for AgonMachine {
@@ -70,13 +75,30 @@ impl Machine for AgonMachine {
     }
 }
 
+fn read_ez80_cstring(machine: &AgonMachine, address: u32) -> String {
+    let mut s: Vec<u8> = vec![];
+    let mut ptr = address;
+
+    loop {
+        match machine.peek(ptr) {
+            0 => break,
+            b => s.push(b)
+        }
+        ptr += 1;
+    }
+
+    String::from_utf8(s).unwrap()
+}
+
 impl AgonMachine {
     pub fn new(tx : Sender<u8>, rx : Receiver<u8>) -> AgonMachine {
         AgonMachine {
             mem: [0; MEM_SIZE],
             tx,
             rx,
-            rx_buf: None
+            rx_buf: None,
+            open_files: HashMap::new(),
+            enable_hostfs: true
         }
     }
 
@@ -99,8 +121,20 @@ impl AgonMachine {
                 std::process::exit(-1);
             }
         };
+        
         for (i, e) in code.iter().enumerate() {
             self.poke(i as u32, *e);
+        }
+
+        // checksum the loaded MOS, to identify supported versions
+        let mut checksum = 0u32;
+        for i in (0..code.len()).step_by(3) {
+            checksum ^= self._peek24(i as u32);
+        }
+
+        if checksum != 0xc102d8 {
+            println!("WARNING: Unsupported MOS version (only 1.03 is supported): disabling hostfs");
+            self.enable_hostfs = false;
         }
     }
 
@@ -115,7 +149,123 @@ impl AgonMachine {
                 let mut env = Environment::new(&mut cpu.state, self);
                 env.interrupt(0x18); // uart0_handler
             }
-            //if cpu.state.pc() >= 0xb06a && cpu.state.pc() <= 0xb06a+0x80 { // trace in toupper
+            if self.enable_hostfs {
+                // f_close
+                if cpu.state.pc() == 0x822b {
+                    let mut env = Environment::new(&mut cpu.state, self);
+                    let fptr = env.peek24(env.state.sp() + 3);
+                    env.state.reg.set24(Reg16::HL, 0); // ok
+                    env.subroutine_return();
+
+                    // closes in Drop
+                    self.open_files.remove(&fptr);
+                }
+                // f_gets
+                if cpu.state.pc() == 0x9c91 {
+                    //f_gets(buffer, size, &fil);
+                    let mut buf = self._peek24(cpu.state.sp() + 3);
+                    let max_len = self._peek24(cpu.state.sp() + 6);
+                    let fptr = self._peek24(cpu.state.sp() + 9);
+
+                    match self.open_files.get(&fptr) {
+                        Some(mut f) => {
+                            let mut line = vec![];
+                            let mut host_buf = vec![0; 1];
+                            loop {
+                                f.read(host_buf.as_mut_slice()).unwrap();
+                                line.push(host_buf[0]);
+
+                                if host_buf[0] == 10 || host_buf[0] == 0 { break; }
+                            }
+                            // no f.tell()...
+                            let fpos = f.seek(SeekFrom::Current(0)).unwrap();
+                            // save file position to FIL.fptr
+                            self._poke24(fptr + 17, fpos as u32);
+                            for b in line {
+                                self.poke(buf, b);
+                                buf += 1;
+                            }
+                            self.poke(buf, 0);
+                            cpu.state.reg.set24(Reg16::HL, 0); // success
+                        }
+                        None => {
+                            cpu.state.reg.set24(Reg16::HL, 1); // error
+                        }
+                    }
+                    let mut env = Environment::new(&mut cpu.state, self);
+                    env.subroutine_return();
+                }
+                // f_read
+                if cpu.state.pc() == 0x785e {
+                    //fr = f_read(&fil, (void *)address, fSize, &br);		
+                    let fptr = self._peek24(cpu.state.sp() + 3);
+                    let mut buf = self._peek24(cpu.state.sp() + 6);
+                    let len = self._peek24(cpu.state.sp() + 9);
+                    match self.open_files.get(&fptr) {
+                        Some(mut f) => {
+                            let mut host_buf: Vec<u8> = vec![0; len as usize];
+                            f.read(host_buf.as_mut_slice()).unwrap();
+                            // no f.tell()...
+                            let fpos = f.seek(SeekFrom::Current(0)).unwrap();
+                            // copy to agon ram 
+                            for b in host_buf {
+                                self.poke(buf, b);
+                                buf += 1;
+                            }
+                            // save file position to FIL.fptr
+                            self._poke24(fptr + 17, fpos as u32);
+
+                            cpu.state.reg.set24(Reg16::HL, 0); // ok
+                        }
+                        None => {
+                            cpu.state.reg.set24(Reg16::HL, 1); // error
+                        }
+                    }
+                    let mut env = Environment::new(&mut cpu.state, self);
+                    env.subroutine_return();
+                }
+                // f_open
+                if cpu.state.pc() == 0x738c {
+                    let fptr = self._peek24(cpu.state.sp() + 3);
+                    let filename = {
+                        let ptr = self._peek24(cpu.state.sp() + 6);
+                        read_ez80_cstring(self, ptr)
+                    };
+                    let mode = self._peek24(cpu.state.sp() + 9);
+                    match std::fs::File::options().read(true).write(true).open(&filename) {
+                        Ok(mut f) => {
+                            // save the size in the FIL structure
+                            let mut file_len = f.seek(SeekFrom::End(0)).unwrap();
+                            f.seek(SeekFrom::Start(0)).unwrap();
+                            // XXX don't support files larger than 512KiB
+                            file_len = if file_len > (1<<19) { 1<<19 } else { file_len };
+
+                            // store file len in fatfs FIL structure
+                            self._poke24(fptr + 11, file_len as u32);
+                            // field is 8 bytes long, so fill the rest with zeros
+                            self._poke24(fptr + 14, 0);
+                            self._poke16(fptr + 17, 0);
+
+                            // FIL.fptr: QWORD = 0
+                            self._poke24(fptr + 17, 0);
+                            self._poke24(fptr + 20, 0);
+                            
+                            self.open_files.insert(fptr, f);
+                            cpu.state.reg.set24(Reg16::HL, 0); // ok
+                        }
+                        Err(_) => {
+                            cpu.state.reg.set24(Reg16::HL, 1); // error
+                        }
+
+                    }
+                    let mut env = Environment::new(&mut cpu.state, self);
+                    env.subroutine_return();
+                };
+            }
+            /*
+            if cpu.state.pc() == 0xb4a0 { println!("icmpzero()") };
+            */
+            //if cpu.state.pc() >= 0x1d88 && cpu.state.pc() <= 0x1d88+100 { // trace in toupper
             if false {
                cpu.set_trace(true);
             }
