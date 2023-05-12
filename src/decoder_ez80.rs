@@ -629,12 +629,3 @@ pub const BLI_A: [(bool, bool, &str); 4] = [
     (true,  true, "IR"),
     (false, true, "DR")
 ];
-
-pub fn build_exploding_nop(name: &'static str) -> Opcode {
-    Opcode {
-        name: "NOTIMPLENTED".to_string(),
-        action: Box::new(move |_: &mut Environment| {
-            panic!("{} not implemented", name);
-        })
-    }
-}

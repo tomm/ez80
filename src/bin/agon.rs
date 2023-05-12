@@ -87,11 +87,11 @@ fn handle_vdp(tx_to_ez80: &Sender<u8>, rx_from_ez80: &Receiver<u8>) -> bool {
 }
 
 fn main() {
-    let (tx_VDP2EZ80, rx_VDP2EZ80): (Sender<u8>, Receiver<u8>) = mpsc::channel();
-    let (tx_EZ802VDP, rx_EZ802VDP): (Sender<u8>, Receiver<u8>) = mpsc::channel();
+    let (tx_vdp_to_ez80, rx_vdp_to_ez80): (Sender<u8>, Receiver<u8>) = mpsc::channel();
+    let (tx_ez80_to_vdp, rx_ez80_to_vdp): (Sender<u8>, Receiver<u8>) = mpsc::channel();
 
-    let cpu_thread = std::thread::spawn(move || {
-        let mut machine = AgonMachine::new(tx_EZ802VDP, rx_VDP2EZ80);
+    let _cpu_thread = std::thread::spawn(move || {
+        let mut machine = AgonMachine::new(tx_ez80_to_vdp, rx_vdp_to_ez80);
         machine.start();
     });
 
@@ -99,7 +99,7 @@ fn main() {
     let mut commands = vec!["run\r", "load helloworld.bin\r"];
 
     loop {
-        if !handle_vdp(&tx_VDP2EZ80, &rx_EZ802VDP) {
+        if !handle_vdp(&tx_vdp_to_ez80, &rx_ez80_to_vdp) {
             // no packets from ez80. sleep a little
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
@@ -108,7 +108,7 @@ fn main() {
             if elapsed > std::time::Duration::from_secs(2) {
                 start_time = Some(std::time::SystemTime::now());
                 if let Some(cmd) = commands.pop() {
-                    send_keys(&tx_VDP2EZ80, cmd);
+                    send_keys(&tx_vdp_to_ez80, cmd);
                 }
             }
         }

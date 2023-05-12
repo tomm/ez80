@@ -5,11 +5,21 @@ use crate::registers::*;
 use std::sync::mpsc::{Sender, Receiver};
 use std::sync::mpsc;
 use std::collections::HashMap;
-use std::io::{ prelude::*, Seek, SeekFrom, Read };
+use std::io::{ Seek, SeekFrom, Read };
 
 const ROM_SIZE: usize = 0x40000; // 256 KiB
 const RAM_SIZE: usize = 0x80000; // 512 KiB
 const MEM_SIZE: usize = ROM_SIZE + RAM_SIZE;
+
+mod mos {
+    // FatFS struct FIL
+    pub const SIZEOF_MOS_FIL_STRUCT: u32 = 36;
+    pub const FIL_MEMBER_OBJSIZE: u32 = 11;
+    pub const FIL_MEMBER_FPTR: u32 = 17;
+    // f_open mode (3rd arg)
+    //pub const FA_READ: u32 = 1;
+    pub const FA_WRITE: u32 = 2;
+}
 
 pub struct AgonMachine {
     mem: [u8; MEM_SIZE],
@@ -75,21 +85,6 @@ impl Machine for AgonMachine {
     }
 }
 
-fn read_ez80_cstring(machine: &AgonMachine, address: u32) -> String {
-    let mut s: Vec<u8> = vec![];
-    let mut ptr = address;
-
-    loop {
-        match machine.peek(ptr) {
-            0 => break,
-            b => s.push(b)
-        }
-        ptr += 1;
-    }
-
-    String::from_utf8(s).unwrap()
-}
-
 impl AgonMachine {
     pub fn new(tx : Sender<u8>, rx : Receiver<u8>) -> AgonMachine {
         AgonMachine {
@@ -138,139 +133,168 @@ impl AgonMachine {
         }
     }
 
+    fn hostfs_mos_f_close(&mut self, cpu: &mut Cpu) {
+        let mut env = Environment::new(&mut cpu.state, self);
+        let fptr = env.peek24(env.state.sp() + 3);
+        env.state.reg.set24(Reg16::HL, 0); // ok
+        env.subroutine_return();
+
+        // closes in Drop
+        self.open_files.remove(&fptr);
+    }
+
+    fn hostfs_mos_f_gets(&mut self, cpu: &mut Cpu) {
+        let mut buf = self._peek24(cpu.state.sp() + 3);
+        let max_len = self._peek24(cpu.state.sp() + 6);
+        let fptr = self._peek24(cpu.state.sp() + 9);
+
+        match self.open_files.get(&fptr) {
+            Some(mut f) => {
+                let mut line = vec![];
+                let mut host_buf = vec![0; 1];
+                for _ in 0..max_len {
+                    f.read(host_buf.as_mut_slice()).unwrap();
+                    line.push(host_buf[0]);
+
+                    if host_buf[0] == 10 || host_buf[0] == 0 { break; }
+                }
+                // no f.tell()...
+                let fpos = f.seek(SeekFrom::Current(0)).unwrap();
+                // save file position to FIL.fptr
+                self._poke24(fptr + mos::FIL_MEMBER_FPTR, fpos as u32);
+                for b in line {
+                    self.poke(buf, b);
+                    buf += 1;
+                }
+                self.poke(buf, 0);
+                cpu.state.reg.set24(Reg16::HL, 0); // success
+            }
+            None => {
+                cpu.state.reg.set24(Reg16::HL, 1); // error
+            }
+        }
+        let mut env = Environment::new(&mut cpu.state, self);
+        env.subroutine_return();
+    }
+
+    fn hostfs_mos_f_read(&mut self, cpu: &mut Cpu) {
+        //fr = f_read(&fil, (void *)address, fSize, &br);		
+        let fptr = self._peek24(cpu.state.sp() + 3);
+        let mut buf = self._peek24(cpu.state.sp() + 6);
+        let len = self._peek24(cpu.state.sp() + 9);
+        match self.open_files.get(&fptr) {
+            Some(mut f) => {
+                let mut host_buf: Vec<u8> = vec![0; len as usize];
+                f.read(host_buf.as_mut_slice()).unwrap();
+                // no f.tell()...
+                let fpos = f.seek(SeekFrom::Current(0)).unwrap();
+                // copy to agon ram 
+                for b in host_buf {
+                    self.poke(buf, b);
+                    buf += 1;
+                }
+                // save file position to FIL.fptr
+                self._poke24(fptr + mos::FIL_MEMBER_FPTR, fpos as u32);
+
+                cpu.state.reg.set24(Reg16::HL, 0); // ok
+            }
+            None => {
+                cpu.state.reg.set24(Reg16::HL, 1); // error
+            }
+        }
+        let mut env = Environment::new(&mut cpu.state, self);
+        env.subroutine_return();
+    }
+
+    fn hostfs_mos_f_open(&mut self, cpu: &mut Cpu) {
+        let fptr = self._peek24(cpu.state.sp() + 3);
+        let filename = {
+            let ptr = self._peek24(cpu.state.sp() + 6);
+            z80_mem_tools::get_cstring(self, ptr)
+        };
+        let mode = self._peek24(cpu.state.sp() + 9);
+        match std::fs::File::options().read(true).write(mode == mos::FA_WRITE).open(&filename) {
+            Ok(mut f) => {
+                // wipe the FIL structure
+                z80_mem_tools::memset(self, fptr, 0, mos::SIZEOF_MOS_FIL_STRUCT);
+
+                // save the size in the FIL structure
+                let mut file_len = f.seek(SeekFrom::End(0)).unwrap();
+                f.seek(SeekFrom::Start(0)).unwrap();
+
+                // XXX don't support files larger than 512KiB
+                file_len = file_len.min(1<<19);
+
+                // store file len in fatfs FIL structure
+                self._poke24(fptr + mos::FIL_MEMBER_OBJSIZE, file_len as u32);
+                
+                // store mapping from MOS *FIL to rust File
+                self.open_files.insert(fptr, f);
+
+                cpu.state.reg.set24(Reg16::HL, 0); // ok
+            }
+            Err(_) => {
+                cpu.state.reg.set24(Reg16::HL, 1); // error
+            }
+
+        }
+        let mut env = Environment::new(&mut cpu.state, self);
+        env.subroutine_return();
+    }
+
     pub fn start(&mut self) {
         let mut cpu = Cpu::new_ez80();
+
         self.load_mos();
-        // Run emulation
+
         cpu.state.set_pc(0x0000);
-        //for _ in 0..3600 {
+
         loop {
             if cpu.state.instructions_executed % 1024 == 0 {
                 let mut env = Environment::new(&mut cpu.state, self);
                 env.interrupt(0x18); // uart0_handler
             }
+
             if self.enable_hostfs {
-                // f_close
-                if cpu.state.pc() == 0x822b {
-                    let mut env = Environment::new(&mut cpu.state, self);
-                    let fptr = env.peek24(env.state.sp() + 3);
-                    env.state.reg.set24(Reg16::HL, 0); // ok
-                    env.subroutine_return();
-
-                    // closes in Drop
-                    self.open_files.remove(&fptr);
-                }
-                // f_gets
-                if cpu.state.pc() == 0x9c91 {
-                    //f_gets(buffer, size, &fil);
-                    let mut buf = self._peek24(cpu.state.sp() + 3);
-                    let max_len = self._peek24(cpu.state.sp() + 6);
-                    let fptr = self._peek24(cpu.state.sp() + 9);
-
-                    match self.open_files.get(&fptr) {
-                        Some(mut f) => {
-                            let mut line = vec![];
-                            let mut host_buf = vec![0; 1];
-                            loop {
-                                f.read(host_buf.as_mut_slice()).unwrap();
-                                line.push(host_buf[0]);
-
-                                if host_buf[0] == 10 || host_buf[0] == 0 { break; }
-                            }
-                            // no f.tell()...
-                            let fpos = f.seek(SeekFrom::Current(0)).unwrap();
-                            // save file position to FIL.fptr
-                            self._poke24(fptr + 17, fpos as u32);
-                            for b in line {
-                                self.poke(buf, b);
-                                buf += 1;
-                            }
-                            self.poke(buf, 0);
-                            cpu.state.reg.set24(Reg16::HL, 0); // success
-                        }
-                        None => {
-                            cpu.state.reg.set24(Reg16::HL, 1); // error
-                        }
-                    }
-                    let mut env = Environment::new(&mut cpu.state, self);
-                    env.subroutine_return();
-                }
-                // f_read
-                if cpu.state.pc() == 0x785e {
-                    //fr = f_read(&fil, (void *)address, fSize, &br);		
-                    let fptr = self._peek24(cpu.state.sp() + 3);
-                    let mut buf = self._peek24(cpu.state.sp() + 6);
-                    let len = self._peek24(cpu.state.sp() + 9);
-                    match self.open_files.get(&fptr) {
-                        Some(mut f) => {
-                            let mut host_buf: Vec<u8> = vec![0; len as usize];
-                            f.read(host_buf.as_mut_slice()).unwrap();
-                            // no f.tell()...
-                            let fpos = f.seek(SeekFrom::Current(0)).unwrap();
-                            // copy to agon ram 
-                            for b in host_buf {
-                                self.poke(buf, b);
-                                buf += 1;
-                            }
-                            // save file position to FIL.fptr
-                            self._poke24(fptr + 17, fpos as u32);
-
-                            cpu.state.reg.set24(Reg16::HL, 0); // ok
-                        }
-                        None => {
-                            cpu.state.reg.set24(Reg16::HL, 1); // error
-                        }
-                    }
-                    let mut env = Environment::new(&mut cpu.state, self);
-                    env.subroutine_return();
-                }
-                // f_open
-                if cpu.state.pc() == 0x738c {
-                    let fptr = self._peek24(cpu.state.sp() + 3);
-                    let filename = {
-                        let ptr = self._peek24(cpu.state.sp() + 6);
-                        read_ez80_cstring(self, ptr)
-                    };
-                    let mode = self._peek24(cpu.state.sp() + 9);
-                    match std::fs::File::options().read(true).write(true).open(&filename) {
-                        Ok(mut f) => {
-                            // save the size in the FIL structure
-                            let mut file_len = f.seek(SeekFrom::End(0)).unwrap();
-                            f.seek(SeekFrom::Start(0)).unwrap();
-                            // XXX don't support files larger than 512KiB
-                            file_len = if file_len > (1<<19) { 1<<19 } else { file_len };
-
-                            // store file len in fatfs FIL structure
-                            self._poke24(fptr + 11, file_len as u32);
-                            // field is 8 bytes long, so fill the rest with zeros
-                            self._poke24(fptr + 14, 0);
-                            self._poke16(fptr + 17, 0);
-
-                            // FIL.fptr: QWORD = 0
-                            self._poke24(fptr + 17, 0);
-                            self._poke24(fptr + 20, 0);
-                            
-                            self.open_files.insert(fptr, f);
-                            cpu.state.reg.set24(Reg16::HL, 0); // ok
-                        }
-                        Err(_) => {
-                            cpu.state.reg.set24(Reg16::HL, 1); // error
-                        }
-
-                    }
-                    let mut env = Environment::new(&mut cpu.state, self);
-                    env.subroutine_return();
-                };
+                if cpu.state.pc() == 0x822b { self.hostfs_mos_f_close(&mut cpu); }
+                if cpu.state.pc() == 0x9c91 { self.hostfs_mos_f_gets(&mut cpu); }
+                if cpu.state.pc() == 0x785e { self.hostfs_mos_f_read(&mut cpu); }
+                if cpu.state.pc() == 0x738c { self.hostfs_mos_f_open(&mut cpu); }
             }
-            /*
-            if cpu.state.pc() == 0xb4a0 { println!("icmpzero()") };
-            */
+
             //if cpu.state.pc() >= 0x1d88 && cpu.state.pc() <= 0x1d88+100 { // trace in toupper
             if false {
                cpu.set_trace(true);
             }
+
             cpu.execute_instruction(self);
             cpu.set_trace(false);
         }
+    }
+}
+
+// misc Machine tools
+mod z80_mem_tools {
+    use crate::Machine;
+
+    pub fn memset<M: Machine>(machine: &mut M, address: u32, fill: u8, count: u32) {
+        for loc in address..(address + count) {
+            machine.poke(loc, fill);
+        }
+    }
+
+    pub fn get_cstring<M: Machine>(machine: &M, address: u32) -> String {
+        let mut s: Vec<u8> = vec![];
+        let mut ptr = address;
+
+        loop {
+            match machine.peek(ptr) {
+                0 => break,
+                b => s.push(b)
+            }
+            ptr += 1;
+        }
+
+        String::from_utf8(s).unwrap()
     }
 }

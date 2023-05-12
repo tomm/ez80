@@ -1,6 +1,5 @@
 use super::environment::*;
 use super::registers::*;
-use super::state::*;
 
 type OpcodeFn = dyn Fn(&mut Environment);
 
