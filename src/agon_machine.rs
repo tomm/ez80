@@ -122,11 +122,7 @@ impl AgonMachine {
         }
 
         // checksum the loaded MOS, to identify supported versions
-        let mut checksum = 0u32;
-        for i in (0..code.len()).step_by(3) {
-            checksum ^= self._peek24(i as u32);
-        }
-
+        let checksum = z80_mem_tools::checksum(self, 0, code.len() as u32);
         if checksum != 0xc102d8 {
             println!("WARNING: Unsupported MOS version (only 1.03 is supported): disabling hostfs");
             self.enable_hostfs = false;
@@ -262,7 +258,7 @@ impl AgonMachine {
                 if cpu.state.pc() == 0x738c { self.hostfs_mos_f_open(&mut cpu); }
             }
 
-            //if cpu.state.pc() >= 0x1d88 && cpu.state.pc() <= 0x1d88+100 { // trace in toupper
+            //if cpu.state.pc() >= 0x40000 && cpu.state.pc() <= 0xb0000 { // trace in userspace
             if false {
                cpu.set_trace(true);
             }
@@ -296,5 +292,13 @@ mod z80_mem_tools {
         }
 
         String::from_utf8(s).unwrap()
+    }
+
+    pub fn checksum<M: Machine>(machine: &M, start: u32, len: u32) -> u32 {
+        let mut checksum = 0u32;
+        for i in (start..(start+len)).step_by(3) {
+            checksum ^= machine._peek24(i as u32);
+        }
+        checksum
     }
 }
