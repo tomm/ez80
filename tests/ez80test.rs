@@ -40,13 +40,13 @@ fn test_ez80_mem_wrap() {
     let mut sys = PlainMachine::new();
     let mut cpu = Cpu::new_ez80();
 
-    cpu.registers().set24(Reg16::SP, 0xFFFF);
+    cpu.registers().set16(Reg16::SP, 0xFFFF);
     sys.poke(0x00000, 0xc1); // POP BC
     sys.poke(0x0FFFF, 0xfe); // POP BC
     sys.poke(0x10000, 0xca); // POP BC
 
     cpu.execute_instruction(&mut sys);
-    assert_eq!(0x0001, cpu.registers().get24(Reg16::SP));
+    assert_eq!(0x0001, cpu.registers().get16(Reg16::SP));
     assert_eq!(0x00c1fe, cpu.registers().get24(Reg16::BC));
 
     cpu.set_adl(true);

@@ -206,7 +206,7 @@ pub fn build_ex_af() -> Opcode {
     Opcode {
         name: "EX AF, AF'".to_string(),
         action: Box::new(|env: &mut Environment| {
-            env.state.reg.swap(Reg16::AF);
+            env.state.reg.swap16(Reg16::AF);
         })
     }
 }
@@ -215,9 +215,9 @@ pub fn build_exx() -> Opcode {
     Opcode {
         name: "EXX".to_string(),
         action: Box::new(|env: &mut Environment| {
-            env.state.reg.swap(Reg16::BC);
-            env.state.reg.swap(Reg16::DE);
-            env.state.reg.swap(Reg16::HL); // NO IX, IY variant
+            env.state.reg.swap24(Reg16::BC);
+            env.state.reg.swap24(Reg16::DE);
+            env.state.reg.swap24(Reg16::HL); // NO IX, IY variant
         })
     }
 }

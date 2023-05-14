@@ -108,12 +108,13 @@ impl Cpu {
         env.state.instructions_executed += 1;
 
         if self.trace {
-            print!(" PC:{:06x} AF:{:04x} BC:{:06x} DE:{:06x} HL:{:06x} SP:{:06x} IX:{:06x} IY:{:06x} Flags:{:08b} MB {:02x} ADL {:01x} MADL {:01x} tick {}",
+            print!(" PC:{:06x} AF:{:04x} BC:{:06x} DE:{:06x} HL:{:06x} SPS:{:04x} SPL:{:06x} IX:{:06x} IY:{:06x} Flags:{:08b} MB {:02x} ADL {:01x} MADL {:01x} tick {}",
                 self.state.pc(),
                 self.state.reg.get16(Reg16::AF),
                 self.state.reg.get24(Reg16::BC),
                 self.state.reg.get24(Reg16::DE),
                 self.state.reg.get24(Reg16::HL),
+                self.state.reg.get16(Reg16::SP),
                 self.state.reg.get24(Reg16::SP),
                 self.state.reg.get24(Reg16::IX),
                 self.state.reg.get24(Reg16::IY),

@@ -41,35 +41,33 @@ pub enum Reg8 {
     IYH = 17,
     /// Low byte of IY
     IYL = 18,
-    /// XXX it isn't really called this. should be SPS for Z80 mode and SPL for ADL mode...
-    SPU = 19,
-    /// High byte of SP
-    SPH = 20,
-    /// Low byte of SP
-    SPL = 21,
+    /// High byte of SPS
+    SPSH = 19,
+    /// Low byte of SPS
+    SPSL = 20,
+    /// Top byte of SPL
+    SPLU = 21,
+    SPLH = 22,
+    SPLL = 23,
     /// Pseudo register, has to be replaced by (HL) 
-     _HL = 22 // Invalid
+     _HL = 24 // Invalid
 }
-const REG_COUNT8: usize = 22;
+const REG_COUNT8: usize = 24;
 
 
-/// 16 bit registers, composed from 8 bit registers
+/// Long registers -- either 16 or 24 bits, depending on CPU mode.
+/// SP is actually 2 separate registers, SPS (16-bit) and SPL (24-bit),
+/// Which you access depends whether you use reg16, reg24, set16 or set24
+/// XXX Reg16 is a poor name
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Reg16 {
-    /// 16 bit register AF
-    AF = Reg8::A as isize,
-    /// 16 bit register BC
-    BC = Reg8::B as isize,
-    /// 16 bit register DE
-    DE = Reg8::D as isize,
-    /// 16 bit register HL
-    HL = Reg8::H as isize,
-    /// 16 bit register IX
-    IX = Reg8::IXH as isize,
-    /// 16 bit register IY
-    IY = Reg8::IYH as isize,
-    /// 16 bit register SP
-    SP = Reg8::SPH as isize
+    AF,
+    BC,
+    DE,
+    HL,
+    IX,
+    IY,
+    SP,
 }
 
 /*
@@ -221,16 +219,42 @@ impl Registers {
     /// Returns the value of a 16 bit register
     #[inline]
     pub fn get16(&self, rr: Reg16) -> u16 {
-        self.data[rr as usize +1] as u16
-        + ((self.data[rr as usize] as u16) << 8)
+        let r8 = self.map_reg16_to_reg8(rr);
+        self.data[r8 as usize +1] as u16
+        + ((self.data[r8 as usize] as u16) << 8)
+    }
+
+    fn map_reg16_to_reg8(&self, rr: Reg16) -> Reg8 {
+        match rr {
+            Reg16::AF => Reg8::A,
+            Reg16::BC => Reg8::B,
+            Reg16::DE => Reg8::D,
+            Reg16::HL => Reg8::H,
+            Reg16::IX => Reg8::IXH,
+            Reg16::IY => Reg8::IYH,
+            Reg16::SP => Reg8::SPSH,
+        }
+    }
+
+    fn map_reg24_to_reg8(&self, rr: Reg16) -> Reg8 {
+        match rr {
+            Reg16::AF => panic!(),
+            Reg16::BC => Reg8::BCU,
+            Reg16::DE => Reg8::DEU,
+            Reg16::HL => Reg8::HLU,
+            Reg16::IX => Reg8::IXU,
+            Reg16::IY => Reg8::IYU,
+            Reg16::SP => Reg8::SPLU,
+        }
     }
 
     /// Sets the value of a 16 bit register. Changes the
     /// value of the two underlying 8 bit registers.
     #[inline]
     pub fn set16(&mut self, rr: Reg16, value: u16) {
-        self.data[rr as usize +1] = value as u8;
-        self.data[rr as usize] = (value >> 8) as u8;
+        let r8 = self.map_reg16_to_reg8(rr);
+        self.data[r8 as usize +1] = value as u8;
+        self.data[r8 as usize] = (value >> 8) as u8;
         //if self.mode8080 && rr == Reg16::AF {
         if self.mode8080 && rr == Reg16::AF {
             // Ensure non existent flags have proper values
@@ -265,26 +289,33 @@ impl Registers {
     /// Returns the value of a 16 bit register
     #[inline]
     pub fn get24(&self, rr: Reg16) -> u32 {
-        self.data[rr as usize +1] as u32
-        + ((self.data[rr as usize] as u32) << 8)
-        + ((self.data[rr as usize -1] as u32) << 16)
+        let r8 = self.map_reg24_to_reg8(rr);
+        self.data[r8 as usize +2] as u32
+        + ((self.data[r8 as usize +1] as u32) << 8)
+        + ((self.data[r8 as usize] as u32) << 16)
     }
 
     /// Sets the value of a 24 bit register. Changes the
     /// value of the three underlying 8 bit registers.
     #[inline]
     pub fn set24(&mut self, rr: Reg16, value: u32) {
-        self.data[rr as usize +1] = value as u8;
-        self.data[rr as usize] = (value >> 8) as u8;
-        self.data[rr as usize -1] = (value >> 16) as u8;
+        let r8 = self.map_reg24_to_reg8(rr);
+        self.data[r8 as usize +2] = value as u8;
+        self.data[r8 as usize +1] = (value >> 8) as u8;
+        self.data[r8 as usize] = (value >> 16) as u8;
     }
 
-    pub(crate) fn swap(&mut self, rr: Reg16) {
-        let ih = rr as usize;
+    pub(crate) fn swap16(&mut self, rr: Reg16) {
+        let ih = self.map_reg16_to_reg8(rr) as usize;
         mem::swap(&mut self.data[ih], &mut self.shadow[ih]);
+        mem::swap(&mut self.data[ih + 1], &mut self.shadow[ih + 1]);
+    }
 
-        let il = rr as usize + 1;
-        mem::swap(&mut self.data[il], &mut self.shadow[il]);
+    pub(crate) fn swap24(&mut self, rr: Reg16) {
+        let iu = self.map_reg24_to_reg8(rr) as usize;
+        mem::swap(&mut self.data[iu], &mut self.shadow[iu]);
+        mem::swap(&mut self.data[iu + 1], &mut self.shadow[iu + 1]);
+        mem::swap(&mut self.data[iu + 2], &mut self.shadow[iu + 2]);
     }
 
     /// Returns the value of a flag
