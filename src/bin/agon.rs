@@ -89,22 +89,37 @@ fn handle_vdp(tx_to_ez80: &Sender<u8>, rx_from_ez80: &Receiver<u8>) -> bool {
 fn main() {
     let (tx_vdp_to_ez80, rx_vdp_to_ez80): (Sender<u8>, Receiver<u8>) = mpsc::channel();
     let (tx_ez80_to_vdp, rx_ez80_to_vdp): (Sender<u8>, Receiver<u8>) = mpsc::channel();
+    let vsync_counter_vdp = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+    let vsync_counter_ez80 = vsync_counter_vdp.clone();
 
     let _cpu_thread = std::thread::spawn(move || {
-        let mut machine = AgonMachine::new(tx_ez80_to_vdp, rx_vdp_to_ez80);
+        let mut machine = AgonMachine::new(tx_ez80_to_vdp, rx_vdp_to_ez80, vsync_counter_ez80);
         machine.start();
     });
 
     let mut start_time = Some(std::time::SystemTime::now());
-    let mut commands = vec!["run\r", "load helloworld.bin\r"];
+    let mut last_vsync = std::time::SystemTime::now();
+    let mut commands = vec![];//"run\r", "load bbcbasic.bin\r"];
 
     loop {
         if !handle_vdp(&tx_vdp_to_ez80, &rx_ez80_to_vdp) {
             // no packets from ez80. sleep a little
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
+
+        let now = std::time::SystemTime::now();
+
+        // a fake vsync every 16ms
+        if now.duration_since(last_vsync).unwrap() >=
+            std::time::Duration::from_millis(16) {
+            // notify ez80 by incrementing a shared atomic integer
+            vsync_counter_vdp.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            last_vsync = now;
+        }
+
+        // generate some keyboard events for `commands`
         if let Some(t) = start_time {
-            let elapsed = std::time::SystemTime::now().duration_since(t).unwrap();
+            let elapsed = now.duration_since(t).unwrap();
             if elapsed > std::time::Duration::from_secs(2) {
                 start_time = Some(std::time::SystemTime::now());
                 if let Some(cmd) = commands.pop() {

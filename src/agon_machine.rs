@@ -28,7 +28,8 @@ pub struct AgonMachine {
     rx_buf: Option<u8>,
     // map from MOS fatfs FIL struct ptr to rust File handle
     open_files: HashMap<u32, std::fs::File>,
-    enable_hostfs: bool
+    enable_hostfs: bool,
+    vsync_counter: std::sync::Arc<std::sync::atomic::AtomicU32>,
 }
 
 impl Machine for AgonMachine {
@@ -86,14 +87,15 @@ impl Machine for AgonMachine {
 }
 
 impl AgonMachine {
-    pub fn new(tx : Sender<u8>, rx : Receiver<u8>) -> AgonMachine {
+    pub fn new(tx : Sender<u8>, rx : Receiver<u8>, vsync_counter: std::sync::Arc<std::sync::atomic::AtomicU32>) -> AgonMachine {
         AgonMachine {
             mem: [0; MEM_SIZE],
             tx,
             rx,
             rx_buf: None,
             open_files: HashMap::new(),
-            enable_hostfs: true
+            enable_hostfs: true,
+            vsync_counter
         }
     }
 
@@ -240,15 +242,27 @@ impl AgonMachine {
 
     pub fn start(&mut self) {
         let mut cpu = Cpu::new_ez80();
+        let mut last_vsync_count = 0_u32;
 
         self.load_mos();
 
         cpu.state.set_pc(0x0000);
 
         loop {
+            // fire uart interrupt
             if cpu.state.instructions_executed % 1024 == 0 {
                 let mut env = Environment::new(&mut cpu.state, self);
                 env.interrupt(0x18); // uart0_handler
+            }
+
+            // fire vsync interrupt
+            {
+                let cur_vsync_count = self.vsync_counter.load(std::sync::atomic::Ordering::Relaxed);
+                if cur_vsync_count != last_vsync_count {
+                    last_vsync_count = cur_vsync_count;
+                    let mut env = Environment::new(&mut cpu.state, self);
+                    env.interrupt(0x32);
+                }
             }
 
             if self.enable_hostfs {
