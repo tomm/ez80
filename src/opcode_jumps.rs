@@ -1,6 +1,7 @@
 use super::opcode::*;
 use super::environment::*;
 use super::registers::*;
+use super::state::SizePrefix;
 
 // Relative jumps
 pub fn build_djnz() -> Opcode {
@@ -47,14 +48,33 @@ fn relative_jump(env: &mut Environment, offset: u8) {
     env.state.set_pc(pc);
 }
 
+fn handle_jump_adl_state(env: &mut Environment) {
+    if env.state.reg.adl {
+        match env.state.sz_prefix {
+            SizePrefix::LIS => { env.state.reg.adl = false },
+            _ => {},
+        }
+
+
+    } else {
+        match env.state.sz_prefix {
+            SizePrefix::LIL => { env.state.reg.adl = true },
+            SizePrefix::LIS | SizePrefix::SIL => {
+                eprintln!("Invalid size prefix with jump at PC=${:x}", env.state.pc());
+            },
+            SizePrefix::SIS | SizePrefix::None => {}
+        }
+    }
+}
+
 // Absolute jumps
 pub fn build_jp_unconditional() -> Opcode {
     Opcode {
         name: "JP nn".to_string(),
         action: Box::new(move |env: &mut Environment| {
             let address = env.advance_immediate_16mbase_or_24();
+            handle_jump_adl_state(env);
             env.state.set_pc(address);
-            env.state.reg.adl = env.state.is_op_long();
         })
     }
 }
@@ -82,13 +102,60 @@ pub fn build_jp_hl() -> Opcode {
     }
 }
 
+fn handle_call_size_prefix(env: &mut Environment) {
+    let pc = env.state.pc();
+
+    if env.state.reg.adl {
+        match env.state.sz_prefix {
+            SizePrefix::None => {
+                env.push(pc); // 3 bytes onto SPL
+            },
+            SizePrefix::LIS => {
+                env.push_byte_sps((pc >> 8) as u8);
+                env.push_byte_sps(pc as u8);
+                env.push_byte_spl((pc >> 16) as u8);
+                env.push_byte_spl(3);
+                env.state.reg.adl = false;
+            }
+            SizePrefix::LIL => {
+                env.push(pc); // 3 bytes onto SPL
+                env.push_byte_spl(3);
+            }
+            _ => {
+                env.push(pc); // 3 bytes onto SPL
+                eprintln!("invalid call size prefix");
+            }
+        }
+    } else {
+        match env.state.sz_prefix {
+            SizePrefix::None => {
+                env.push(pc); // 2 bytes onto SPS
+            },
+            SizePrefix::SIL => {
+                env.push(pc); // 2 bytes onto SPS
+                env.push_byte_spl(2);
+                env.state.reg.adl = true;
+            }
+            SizePrefix::SIS => {
+                env.push(pc); // 2 bytes onto SPS
+                env.push_byte_spl(2);
+            }
+            _ => {
+                env.push(pc); // 2 bytes onto SPS
+                eprintln!("invalid call size prefix");
+            }
+        }
+    }
+}
+
 // Calls to subroutine
 pub fn build_call() -> Opcode {
     Opcode {
         name: "CALL nn".to_string(),
         action: Box::new(move |env: &mut Environment| {
             let address = env.advance_immediate_16mbase_or_24();
-            env.subroutine_call(address);
+            handle_call_size_prefix(env);
+            env.state.set_pc(address);
         })
     }
 }
@@ -99,19 +166,69 @@ pub fn build_call_eq((flag, value, name): (Flag, bool, &str)) -> Opcode {
         action: Box::new(move |env: &mut Environment| {
             let address = env.advance_immediate_16mbase_or_24();
             if env.state.reg.get_flag(flag) == value {
-                env.subroutine_call(address);
+                handle_call_size_prefix(env);
+                env.state.set_pc(address);
             }
         })
     }
 }
 
+fn handle_rst_size_prefix(env: &mut Environment, vec: u32) {
+    let pc = env.state.pc();
+
+    if env.state.reg.adl {
+        match env.state.sz_prefix {
+            SizePrefix::None => {
+                env.push(pc);
+                env.state.set_pc(vec);
+            },
+            SizePrefix::SIL => {
+                env.push_byte_sps((pc >> 8) as u8);
+                env.push_byte_sps(pc as u8);
+                env.push_byte_spl((pc >> 16) as u8);
+                env.push_byte_spl(3);
+                env.state.reg.pc = vec;
+                env.state.reg.adl = false;
+            }
+            SizePrefix::LIL => {
+                env.push(pc);
+                env.push_byte_spl(3);
+                env.state.reg.pc = vec;
+            }
+            _ => {
+                eprintln!("invalid rst size prefix");
+            }
+        }
+    } else {
+        match env.state.sz_prefix {
+            SizePrefix::None => {
+                env.push(pc);
+                env.state.set_pc(vec);
+            },
+            SizePrefix::SIS => {
+                env.push(pc);
+                env.push_byte_spl(2);
+                env.state.reg.pc = vec;
+            }
+            SizePrefix::LIS => {
+                env.push_byte_spl((pc >> 8) as u8);
+                env.push_byte_spl(pc as u8);
+                env.push_byte_spl(2);
+                env.state.reg.adl = true;
+                env.state.reg.pc = vec;
+            }
+            _ => {
+                eprintln!("invalid rst size prefix");
+            }
+        }
+    }
+}
 pub fn build_rst(d: u8) -> Opcode {
     Opcode {
         name: format!("RST {:02x}h", d),
         action: Box::new(move |env: &mut Environment| {
-            // -TM- XXX is this right?
             let address = d as u32;
-            env.subroutine_call(address);
+            handle_rst_size_prefix(env, address);
         })
     }
 }

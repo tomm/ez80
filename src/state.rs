@@ -77,7 +77,7 @@ impl State {
     /// Returns the program counter
     #[inline]
     pub fn pc(&self) -> u32 {
-        if self.is_op_long() {
+        if self.reg.adl {
             self.reg.pc
         } else {
             ((self.reg.mbase as u32) << 16) + (self.reg.pc & 0xffff) as u32

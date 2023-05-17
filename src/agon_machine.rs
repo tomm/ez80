@@ -5,7 +5,7 @@ use crate::registers::*;
 use std::sync::mpsc::{Sender, Receiver};
 use std::sync::mpsc;
 use std::collections::HashMap;
-use std::io::{ Seek, SeekFrom, Read };
+use std::io::{ Seek, SeekFrom, Read, Write };
 
 const ROM_SIZE: usize = 0x40000; // 256 KiB
 const RAM_SIZE: usize = 0x80000; // 512 KiB
@@ -19,6 +19,7 @@ mod mos {
     // f_open mode (3rd arg)
     //pub const FA_READ: u32 = 1;
     pub const FA_WRITE: u32 = 2;
+    pub const FA_CREATE_NEW: u32 = 4;
 }
 
 pub struct AgonMachine {
@@ -175,6 +176,41 @@ impl AgonMachine {
         env.subroutine_return();
     }
 
+    fn hostfs_mos_f_write(&mut self, cpu: &mut Cpu) {
+        let fptr = self._peek24(cpu.state.sp() + 3);
+        let buf = self._peek24(cpu.state.sp() + 6);
+        let num = self._peek24(cpu.state.sp() + 9);
+        let num_written_ptr = self._peek24(cpu.state.sp() + 9);
+        //println!("f_write(${:x}, ${:x}, {}, ${:x})", fptr, buf, num, num_written_ptr);
+
+        match self.open_files.get(&fptr) {
+            Some(mut f) => {
+                for i in 0..num {
+                    let byte = self.peek(buf + i);
+                    f.write(&[byte]).unwrap();
+                }
+
+                // no f.tell()...
+                let fpos = f.seek(SeekFrom::Current(0)).unwrap();
+                // save file position to FIL.fptr
+                self._poke24(fptr + mos::FIL_MEMBER_FPTR, fpos as u32);
+
+                // inform caller that all bytes were written
+                self._poke24(num_written_ptr, num);
+
+                // success
+                cpu.state.reg.set24(Reg16::HL, 0);
+            }
+            None => {
+                // error
+                cpu.state.reg.set24(Reg16::HL, 1);
+            }
+        }
+
+        let mut env = Environment::new(&mut cpu.state, self);
+        env.subroutine_return();
+    }
+
     fn hostfs_mos_f_read(&mut self, cpu: &mut Cpu) {
         //fr = f_read(&fil, (void *)address, fSize, &br);		
         let fptr = self._peek24(cpu.state.sp() + 3);
@@ -208,10 +244,18 @@ impl AgonMachine {
         let fptr = self._peek24(cpu.state.sp() + 3);
         let filename = {
             let ptr = self._peek24(cpu.state.sp() + 6);
-            z80_mem_tools::get_cstring(self, ptr)
+            // MOS filenames may not be valid utf-8
+            unsafe {
+                String::from_utf8_unchecked(z80_mem_tools::get_cstring(self, ptr))
+            }
         };
         let mode = self._peek24(cpu.state.sp() + 9);
-        match std::fs::File::options().read(true).write(mode == mos::FA_WRITE).open(&filename) {
+        //println!("f_open(${:x}, \"{}\", {})", fptr, filename.trim_end(), mode);
+        match std::fs::File::options()
+            .read(true)
+            .write(mode & mos::FA_WRITE != 0)
+            .create(mode & mos::FA_CREATE_NEW != 0)
+            .open(filename.trim_end()) {
             Ok(mut f) => {
                 // wipe the FIL structure
                 z80_mem_tools::memset(self, fptr, 0, mos::SIZEOF_MOS_FIL_STRUCT);
@@ -231,8 +275,11 @@ impl AgonMachine {
 
                 cpu.state.reg.set24(Reg16::HL, 0); // ok
             }
-            Err(_) => {
-                cpu.state.reg.set24(Reg16::HL, 1); // error
+            Err(e) => {
+                match e.kind() {
+                    std::io::ErrorKind::NotFound => cpu.state.reg.set24(Reg16::HL, 4),
+                    _ => cpu.state.reg.set24(Reg16::HL, 1)
+                }
             }
 
         }
@@ -250,7 +297,7 @@ impl AgonMachine {
 
         loop {
             // fire uart interrupt
-            if cpu.state.instructions_executed % 1024 == 0 {
+            if cpu.state.instructions_executed % 1024 == 0 && self.maybe_fill_rx_buf() != None {
                 let mut env = Environment::new(&mut cpu.state, self);
                 env.interrupt(0x18); // uart0_handler
             }
@@ -270,15 +317,10 @@ impl AgonMachine {
                 if cpu.state.pc() == 0x9c91 { self.hostfs_mos_f_gets(&mut cpu); }
                 if cpu.state.pc() == 0x785e { self.hostfs_mos_f_read(&mut cpu); }
                 if cpu.state.pc() == 0x738c { self.hostfs_mos_f_open(&mut cpu); }
-            }
-
-            //if cpu.state.pc() >= 0x40000 && cpu.state.pc() <= 0xb0000 { // trace in userspace
-            if false {
-               cpu.set_trace(true);
+                if cpu.state.pc() == 0x7c10 { self.hostfs_mos_f_write(&mut cpu); }
             }
 
             cpu.execute_instruction(self);
-            cpu.set_trace(false);
         }
     }
 }
@@ -293,7 +335,7 @@ mod z80_mem_tools {
         }
     }
 
-    pub fn get_cstring<M: Machine>(machine: &M, address: u32) -> String {
+    pub fn get_cstring<M: Machine>(machine: &M, address: u32) -> Vec<u8> {
         let mut s: Vec<u8> = vec![];
         let mut ptr = address;
 
@@ -304,8 +346,7 @@ mod z80_mem_tools {
             }
             ptr += 1;
         }
-
-        String::from_utf8(s).unwrap()
+        s
     }
 
     pub fn checksum<M: Machine>(machine: &M, start: u32, len: u32) -> u32 {

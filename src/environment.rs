@@ -1,6 +1,6 @@
 use super::machine::*;
 use super::registers::*;
-use super::state::State;
+use super::state::{ State, SizePrefix };
 
 pub struct Environment<'a> {
     pub state: &'a mut State,
@@ -15,20 +15,44 @@ impl <'a> Environment<'_> {
         }
     }
 
+    pub fn wrap_address24(&self, address: u32, increment: i32) -> u32 {
+        address.wrapping_add(increment as u32)
+    }
+
+    // wrap the low 16-bits, leaving the top byte unchanged
+    pub fn wrap_address16(&self, address: u32, increment: i32) -> u32 {
+        (address & 0xff0000) + (address as u16).wrapping_add(increment as u16) as u32
+    }
+
     pub fn wrap_address(&self, address: u32, increment: i32) -> u32 {
         if self.state.is_op_long() {
-            address.wrapping_add(increment as u32)
+            self.wrap_address24(address, increment)
         } else {
-            (address & 0xff0000) + (address as u16).wrapping_add(increment as u16) as u32
+            self.wrap_address16(address, increment)
         }
     }
 
     pub fn interrupt(&mut self, number: u32) -> () {
-        if self.state.reg.get_iff1() {
-            let vector_address = ((self.state.reg.get8(Reg8::I) as u32) << 8) + number;
-            let vector = self.peek16(vector_address) as u32;
+        let vector_address = ((self.state.reg.get8(Reg8::I) as u32) << 8) + number;
+        let vector = self.peek16(vector_address) as u32;
 
-            self.subroutine_call(vector);
+        if self.state.reg.get_iff1() {
+            if self.state.reg.madl {
+                let pc = self.state.pc();
+                if self.state.reg.adl {
+                    self.push(pc);
+                    self.push_byte_spl(3);
+                    self.state.set_pc(vector);
+                } else {
+                    self.push_byte_spl((pc >> 8) as u8);
+                    self.push_byte_spl(pc as u8);
+                    self.push_byte_spl(2);
+                    self.state.reg.adl = true;
+                    self.state.set_pc(vector);
+                }
+            } else {
+                self.subroutine_call(vector);
+            }
         }
     }
 
@@ -73,7 +97,11 @@ impl <'a> Environment<'_> {
     pub fn advance_pc(&mut self) -> u8 {
         let pc = self.state.pc();
         let value = self.sys.peek(pc);
-        self.state.set_pc(pc.wrapping_add(1));
+        if self.state.reg.adl {
+            self.state.set_pc(self.wrap_address24(pc, 1));
+        } else {
+            self.state.set_pc(self.wrap_address16(pc, 1));
+        }
         value
     }
 
@@ -111,52 +139,62 @@ impl <'a> Environment<'_> {
         }
     }
 
-    pub fn push(&mut self, value: u32) {
-        let mut sp = self.state.sp();
+    pub fn push_byte_sps(&mut self, value: u8) {
+        let sps = self.wrap_address16( self.state.reg.get16_mbase(Reg16::SP), -1);
+        self.sys.poke(sps, value);
+        self.state.reg.set16(Reg16::SP, sps as u16);
+    }
 
+    pub fn pop_byte_sps(&mut self) -> u8 {
+        let sps = self.state.reg.get16_mbase(Reg16::SP);
+        let l = self.sys.peek(sps);
+        self.state.reg.set16(Reg16::SP, self.wrap_address16(sps, 1) as u16);
+        l
+    }
+
+    pub fn push_byte_spl(&mut self, value: u8) {
+        let spl = self.wrap_address24( self.state.reg.get24(Reg16::SP), -1);
+        self.sys.poke(spl, value);
+        self.state.reg.set24(Reg16::SP, spl);
+    }
+
+    pub fn pop_byte_spl(&mut self) -> u8 {
+        let spl = self.state.reg.get24(Reg16::SP);
+        let l = self.sys.peek(spl);
+        self.state.reg.set24(Reg16::SP, self.wrap_address24(spl, 1));
+        l
+    }
+
+    pub fn push(&mut self, value: u32) {
         let u = (value >> 16) as u8;
         let h = (value >> 8) as u8;
         let l = value as u8;
 
         if self.state.is_op_long() {
-            sp = sp.wrapping_sub(1);
-            self.sys.poke(sp, u);
-        }
-
-        sp = sp.wrapping_sub(1);
-        self.sys.poke(sp, h);
-
-        sp = sp.wrapping_sub(1);
-        self.sys.poke(sp, l);
-
-        if self.state.is_op_long() {
-            self.state.reg.set24(Reg16::SP, sp);
+            self.push_byte_spl(u);
+            self.push_byte_spl(h);
+            self.push_byte_spl(l);
         } else {
-            self.state.reg.set16(Reg16::SP, sp as u16);
+            self.push_byte_sps(h);
+            self.push_byte_sps(l);
         }
     }
 
     pub fn pop(&mut self) -> u32 {
-        let mut sp = self.state.sp();
-
-        let mut u = 0;
-
-        let l = self.sys.peek(sp);
-        sp = self.wrap_address(sp, 1);
-
-        let h = self.sys.peek(sp);
-        sp = self.wrap_address(sp, 1);
+        let u;
+        let h;
+        let l;
 
         if self.state.is_op_long() {
-            u = self.sys.peek(sp);
-            sp = self.wrap_address(sp, 1);
-        }
-
-        if self.state.is_op_long() {
-            self.state.reg.set24(Reg16::SP, sp);
+            l = self.pop_byte_spl();
+            h = self.pop_byte_spl();
+            u = self.pop_byte_spl();
         } else {
-            self.state.reg.set16(Reg16::SP, sp as u16);
+            l = self.pop_byte_sps();
+            h = self.pop_byte_sps();
+            u = 0;
         }
+
         (l as u32) + ((h as u32) << 8) + ((u as u32) << 16)
     }
 
@@ -166,8 +204,62 @@ impl <'a> Environment<'_> {
     }
 
     pub fn subroutine_return(&mut self) {
-        let pc = self.pop();
-        self.state.set_pc(pc);
+        if self.state.reg.adl {
+            match self.state.sz_prefix {
+                SizePrefix::None => {
+                    let pc = self.pop();
+                    self.state.set_pc(pc);
+                }
+                SizePrefix::LIL => {
+                    let adl_flag = self.pop_byte_spl();
+                    if adl_flag == 2 {
+                        let mut address = self.pop_byte_spl() as u32;
+                        address += (self.pop_byte_spl() as u32) << 8;
+                        self.state.set_pc(address);
+                        self.state.reg.adl = false;
+                    } else if adl_flag == 3 {
+                        let address = self.pop();
+                        self.state.set_pc(address);
+                    } else {
+                        panic!("RET: invalid adl flag on stack");
+                    }
+                }
+                prefix => {
+                    eprintln!("invalid size prefix {:?} to RET at PC=${:x}", prefix, self.state.pc());
+                    let pc = self.pop();
+                    self.state.set_pc(pc);
+                }
+            }
+        } else {
+            match self.state.sz_prefix {
+                SizePrefix::None => {
+                    let pc = self.pop();
+                    self.state.set_pc(pc);
+                }
+                // according to spec, only LIS is valid here
+                // but it seems LIL does work from z80 mode...
+                SizePrefix::LIL | SizePrefix::LIS => {
+                    let adl_flag = self.pop_byte_spl();
+                    if adl_flag == 2 {
+                        let mut address = self.pop_byte_sps() as u32;
+                        address += (self.pop_byte_sps() as u32) << 8;
+                        self.state.reg.adl = false;
+                        self.state.set_pc(address);
+                    } else {
+                        let mut address = (self.pop_byte_spl() as u32) << 16;
+                        address += self.pop_byte_sps() as u32;
+                        address += (self.pop_byte_sps() as u32) << 8;
+                        self.state.reg.adl = true;
+                        self.state.set_pc(address);
+                    }
+                }
+                prefix => {
+                    eprintln!("invalid size prefix {:?} to RET at PC=${:x}", prefix, self.state.pc());
+                    let pc = self.pop();
+                    self.state.set_pc(pc);
+                }
+            }
+        }
     }
 
     pub fn set_index(&mut self, index: Reg16) {

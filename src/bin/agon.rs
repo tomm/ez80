@@ -1,7 +1,7 @@
 use iz80::AgonMachine;
 use std::sync::mpsc;
 use std::sync::mpsc::{Sender, Receiver};
-use std::io::Write;
+use std::io::{ self, BufRead, Write };
 
 fn send_bytes(tx: &Sender<u8>, msg: &Vec<u8>) {
     for b in msg {
@@ -37,6 +37,7 @@ fn handle_vdp(tx_to_ez80: &Sender<u8>, rx_from_ez80: &Receiver<u8>) -> bool {
             match data {
                 // one zero byte sent before everything else. real VDP ignores
                 0 => {},
+                1 => {},
                 0xa => println!(),
                 0xd => {},
                 v if v >= 0x20 && v != 0x7f => {
@@ -86,20 +87,21 @@ fn handle_vdp(tx_to_ez80: &Sender<u8>, rx_from_ez80: &Receiver<u8>) -> bool {
     }
 }
 
-fn main() {
-    let (tx_vdp_to_ez80, rx_vdp_to_ez80): (Sender<u8>, Receiver<u8>) = mpsc::channel();
-    let (tx_ez80_to_vdp, rx_ez80_to_vdp): (Sender<u8>, Receiver<u8>) = mpsc::channel();
-    let vsync_counter_vdp = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
-    let vsync_counter_ez80 = vsync_counter_vdp.clone();
-
-    let _cpu_thread = std::thread::spawn(move || {
-        let mut machine = AgonMachine::new(tx_ez80_to_vdp, rx_vdp_to_ez80, vsync_counter_ez80);
-        machine.start();
-    });
-
+fn start_vdp(tx_vdp_to_ez80: Sender<u8>, rx_ez80_to_vdp: Receiver<u8>,
+             vsync_counter_vdp: std::sync::Arc<std::sync::atomic::AtomicU32>) {
+    let (tx_stdin, rx_stdin): (Sender<String>, Receiver<String>) = mpsc::channel();
     let mut start_time = Some(std::time::SystemTime::now());
     let mut last_vsync = std::time::SystemTime::now();
-    let mut commands = vec![];//"run\r", "load bbcbasic.bin\r"];
+
+    // to avoid blocking on stdin, use a thread and channel to read from it
+    let _stdin_thread = std::thread::spawn(move || {
+        let stdin = io::stdin();
+        for line in stdin.lock().lines() {
+            tx_stdin.send(line.unwrap()).unwrap();
+        }
+    });
+
+    println!("Tom\'s Fake VDP Version 1.03");
 
     loop {
         if !handle_vdp(&tx_vdp_to_ez80, &rx_ez80_to_vdp) {
@@ -117,15 +119,34 @@ fn main() {
             last_vsync = now;
         }
 
-        // generate some keyboard events for `commands`
+        // emit stdin input as keyboard events to the ez80, line by line
         if let Some(t) = start_time {
             let elapsed = now.duration_since(t).unwrap();
             if elapsed > std::time::Duration::from_secs(2) {
-                start_time = Some(std::time::SystemTime::now());
-                if let Some(cmd) = commands.pop() {
-                    send_keys(&tx_vdp_to_ez80, cmd);
+                match rx_stdin.try_recv() {
+                    Ok(line) => {
+                        send_keys(&tx_vdp_to_ez80, &line);
+                        send_keys(&tx_vdp_to_ez80, "\r");
+                        start_time = Some(std::time::SystemTime::now());
+                    }
+                    Err(mpsc::TryRecvError::Disconnected) => {},
+                    Err(mpsc::TryRecvError::Empty) => {}
                 }
             }
         }
     }
+}
+
+fn main() {
+    let (tx_vdp_to_ez80, rx_vdp_to_ez80): (Sender<u8>, Receiver<u8>) = mpsc::channel();
+    let (tx_ez80_to_vdp, rx_ez80_to_vdp): (Sender<u8>, Receiver<u8>) = mpsc::channel();
+    let vsync_counter_vdp = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+    let vsync_counter_ez80 = vsync_counter_vdp.clone();
+
+    let _cpu_thread = std::thread::spawn(move || {
+        let mut machine = AgonMachine::new(tx_ez80_to_vdp, rx_vdp_to_ez80, vsync_counter_ez80);
+        machine.start();
+    });
+
+    start_vdp(tx_vdp_to_ez80, rx_ez80_to_vdp, vsync_counter_vdp);
 }

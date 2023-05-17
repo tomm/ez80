@@ -60,6 +60,12 @@ pub fn build_ld_r_r(dst: Reg8, src: Reg8, _special: bool) -> Opcode {
             action: Box::new(move |env: &mut Environment| {
                 let value = env.state.reg.get8(src);
                 env.state.reg.set8(dst, value);
+
+                if dst == Reg8::A && src == Reg8::R {
+                    // special case. does set some flags
+                    env.state.reg.put_flag(Flag::Z, value == 0);
+                    env.state.reg.put_flag(Flag::S, (value as i8) < 0);
+                }
             })
         }
     } else {

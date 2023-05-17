@@ -106,6 +106,7 @@ impl Cpu {
         env.clear_index();
         env.state.sz_prefix = SizePrefix::None;
         env.state.instructions_executed += 1;
+        env.state.reg.set8(Reg8::R, env.state.reg.get8(Reg8::R).wrapping_add(1));
 
         if self.trace {
             print!(" PC:{:06x} AF:{:04x} BC:{:06x} DE:{:06x} HL:{:06x} SPS:{:04x} SPL:{:06x} IX:{:06x} IY:{:06x} Flags:{:08b} MB {:02x} ADL {:01x} MADL {:01x} tick {}",
@@ -125,8 +126,10 @@ impl Cpu {
                 self.state.instructions_executed,
             );
             //0bffe9
-            println!(" [{:02x} {:02x} {:02x}]", sys.peek(pc),
-                sys.peek(pc.wrapping_add(1)), sys.peek(pc.wrapping_add(2)));
+            println!(" [{:02x} {:02x} {:02x} {:02x}]", sys.peek(pc),
+                sys.peek(pc.wrapping_add(1)),
+                sys.peek(pc.wrapping_add(2)),
+                sys.peek(pc.wrapping_add(3)));
         }
     }
 
