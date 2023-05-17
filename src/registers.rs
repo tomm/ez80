@@ -255,6 +255,24 @@ impl Registers {
         let r8 = self.map_reg16_to_reg8(rr);
         self.data[r8 as usize +1] = value as u8;
         self.data[r8 as usize] = (value >> 8) as u8;
+        if rr != Reg16::AF && rr != Reg16::SP {
+            self.data[r8 as usize -1] = 0;
+        }
+        //if self.mode8080 && rr == Reg16::AF {
+        if self.mode8080 && rr == Reg16::AF {
+            // Ensure non existent flags have proper values
+            self.set_flag(Flag::N);
+            self.clear_flag(Flag::_3);
+            self.clear_flag(Flag::_5);
+        }
+    }
+
+    /// ug. some 16-bit register writes preserve the top bits 17-24
+    /// for example: ex (sp), hl
+    pub fn set16_preserve_17_to_24(&mut self, rr: Reg16, value: u16) {
+        let r8 = self.map_reg16_to_reg8(rr);
+        self.data[r8 as usize +1] = value as u8;
+        self.data[r8 as usize] = (value >> 8) as u8;
         //if self.mode8080 && rr == Reg16::AF {
         if self.mode8080 && rr == Reg16::AF {
             // Ensure non existent flags have proper values

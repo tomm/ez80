@@ -35,11 +35,20 @@ pub struct AgonMachine {
 
 impl Machine for AgonMachine {
     fn peek(&self, address: u32) -> u8 {
-        self.mem[address as usize]
+        if address >= 0xc0000 {
+            println!("eZ80 memory read out of bounds: ${:x}", address);
+            0 
+        } else {
+            self.mem[address as usize]
+        }
     }
 
     fn poke(&mut self, address: u32, value: u8) {
-        self.mem[address as usize] = value;
+        if address >= 0xc0000 || address < 0x40000 {
+            println!("eZ80 memory write out of bounds: ${:x}", address);
+        } else {
+            self.mem[address as usize] = value;
+        }
     }
 
     fn port_in(&mut self, address: u16) -> u8 {
@@ -121,7 +130,7 @@ impl AgonMachine {
         };
         
         for (i, e) in code.iter().enumerate() {
-            self.poke(i as u32, *e);
+            self.mem[i] = *e;
         }
 
         // checksum the loaded MOS, to identify supported versions

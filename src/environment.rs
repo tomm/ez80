@@ -394,6 +394,14 @@ impl <'a> Environment<'_> {
         }
     }
 
+    pub fn set_reg16_preserve_17_to_24(&mut self, rr: Reg16, value: u16) {
+        if rr == Reg16::HL {
+            self.state.reg.set16_preserve_17_to_24(self.state.index, value);
+        } else {
+            self.state.reg.set16_preserve_17_to_24(rr, value);
+        }
+    }
+
     pub fn set_reg24(&mut self, rr: Reg16, value: u32) {
         if rr == Reg16::HL {
             self.state.reg.set24(self.state.index, value);

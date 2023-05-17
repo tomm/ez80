@@ -255,7 +255,7 @@ pub fn build_ex_psp_hl() -> Opcode {
                 env.set_reg24(Reg16::HL, env.peek24(address));
                 env.poke24(address, temp);
             } else {
-                env.set_reg16(Reg16::HL, env.peek16(address));
+                env.set_reg16_preserve_17_to_24(Reg16::HL, env.peek16(address));
                 env.poke16(address, temp as u16);
             }
         })         
