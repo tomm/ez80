@@ -210,6 +210,7 @@ fn handle_rst_size_prefix(env: &mut Environment, vec: u32) {
                 env.push_byte_spl(2);
                 env.state.reg.pc = vec;
             }
+            SizePrefix::LIL | // <- LIL is forbidden by the spec, but work on ez80
             SizePrefix::LIS => {
                 env.push_byte_spl((pc >> 8) as u8);
                 env.push_byte_spl(pc as u8);
