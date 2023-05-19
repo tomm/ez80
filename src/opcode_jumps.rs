@@ -190,12 +190,13 @@ fn handle_rst_size_prefix(env: &mut Environment, vec: u32) {
                 env.state.reg.pc = vec;
                 env.state.reg.adl = false;
             }
+            SizePrefix::LIS | // not valid according to spec, but works on ez80
             SizePrefix::LIL => {
                 env.push(pc);
                 env.push_byte_spl(3);
                 env.state.reg.pc = vec;
             }
-            _ => {
+            SizePrefix::SIS => {
                 eprintln!("invalid rst size prefix");
             }
         }
@@ -205,6 +206,7 @@ fn handle_rst_size_prefix(env: &mut Environment, vec: u32) {
                 env.push(pc);
                 env.state.set_pc(vec);
             },
+            SizePrefix::SIL | // <- SIL forbidden by spec, but works on ez80
             SizePrefix::SIS => {
                 env.push(pc);
                 env.push_byte_spl(2);
@@ -217,9 +219,6 @@ fn handle_rst_size_prefix(env: &mut Environment, vec: u32) {
                 env.push_byte_spl(2);
                 env.state.reg.adl = true;
                 env.state.reg.pc = vec;
-            }
-            _ => {
-                eprintln!("invalid rst size prefix");
             }
         }
     }

@@ -38,10 +38,11 @@ fn handle_vdp(tx_to_ez80: &Sender<u8>, rx_from_ez80: &Receiver<u8>) -> bool {
                 // one zero byte sent before everything else. real VDP ignores
                 0 => {},
                 1 => {},
+                9 => {}, // cursor right
                 0xa => println!(),
                 0xd => {},
                 v if v >= 0x20 && v != 0x7f => {
-                    print!("{}", char::from_u32(data as u32).unwrap());
+                    print!("\x1b[0m{}\x1b[90m", char::from_u32(data as u32).unwrap());
                 }
                 // VDP system control
                 0x17 => {
