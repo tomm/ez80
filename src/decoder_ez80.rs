@@ -233,7 +233,7 @@ impl DecoderEZ80 {
                 0x8e => Some(build_operator_a_idx_offset(Reg16::IX, (operator_adc, "ADC"))),
                 0x96 => Some(build_operator_a_idx_offset(Reg16::IX, (operator_sub, "SUB"))),
                 0x9e => Some(build_operator_a_idx_offset(Reg16::IX, (operator_sbc, "SBC"))),
-                0xa6 => Some(build_operator_a_idx_offset(Reg16::IX, (operator_and, "ADD"))),
+                0xa6 => Some(build_operator_a_idx_offset(Reg16::IX, (operator_and, "AND"))),
                 0xae => Some(build_operator_a_idx_offset(Reg16::IX, (operator_xor, "XOR"))),
                 0xb6 => Some(build_operator_a_idx_offset(Reg16::IX, (operator_or, "OR"))),
                 0xbe => Some(build_operator_a_idx_offset(Reg16::IX, (operator_cp, "CP"))),
@@ -432,9 +432,14 @@ impl DecoderEZ80 {
             let p = DecodingHelper::parts(c);
             let opcode = match p.x {
                 0 => match p.z {
-                    // XXX todo p.y==6 is not valid for in0
-                    0 => Some(build_in0_r_n(R[p.y])),
-                    1 => Some(build_out0_n_r(R[p.y])),
+                    0 => match p.y {
+                        0 | 1 | 2 | 3 | 4 | 5 | 7 => Some(build_in0_r_n(R[p.y])),
+                        _ => Some(build_noni_nop()),
+                    }
+                    1 => match p.y {
+                        6 => Some(build_ld_rr_ind_hl(Reg16::IY)),
+                        _ => Some(build_out0_n_r(R[p.y])),
+                    }
                     2 => match p.p {
                         0 | 1 | 2 => Some(build_lea_rr_ind_offset(RP[p.p], Reg16::IX)),
                         3 => Some(build_lea_rr_ind_offset(Reg16::IX, Reg16::IX)),
@@ -446,9 +451,15 @@ impl DecoderEZ80 {
                         _ => Some(build_noni_nop()), // Invalid instruction NONI + NOP
                     },
                     4 => Some(build_tst_a_r(R[p.y])),
+                    6 => match p.y {
+                        7 => Some(build_ld_ind_hl_rr(Reg16::IY)),
+                        _ => Some(build_noni_nop()), // Invalid instruction NONI + NOP
+                    }
                     7 => match p.y {
                         0 | 2 | 4 => Some(build_ld_rr_ind_hl(RP[p.p])),
                         1 | 3 | 5 => Some(build_ld_ind_hl_rr(RP[p.p])),
+                        6 => Some(build_ld_rr_ind_hl(Reg16::IX)),
+                        7 => Some(build_ld_ind_hl_rr(Reg16::IX)),
                         _ => Some(build_noni_nop()), // Invalid instruction NONI + NOP
                     },
                     _ => Some(build_noni_nop()), // Invalid instruction NONI + NOP
@@ -473,7 +484,7 @@ impl DecoderEZ80 {
                         _ => panic!("Unreachable")
                     },
                     4 => match p.y {
-                        1 | 3 | 5 => Some(build_mlt_rr(RP[p.p])),
+                        1 | 3 | 5 | 7 => Some(build_mlt_rr(RP[p.p])),
                         2 => Some(build_lea_rr_ind_offset(Reg16::IX, Reg16::IY)),
                         4 => Some(build_tst_a_n()),
                         _ => Some(build_neg()), // NEG
@@ -518,7 +529,14 @@ impl DecoderEZ80 {
                     } else {
                         Some(build_noni_nop()) // NONI + NOP
                     },
-                3 => Some(build_noni_nop()), // Invalid instruction NONI + NOP
+                3 => match p.z {
+                    7 => match p.y {
+                        0 => None, //ld i,hl
+                        2 => None, //ld hl,i
+                        _ => Some(build_noni_nop()), // Invalid instruction NONI + NOP
+                    },
+                    _ => Some(build_noni_nop()), // Invalid instruction NONI + NOP
+                },
                 _ => panic!("Unreachable")
             };
 
