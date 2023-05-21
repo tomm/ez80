@@ -85,12 +85,7 @@ impl State {
     }
 
     pub fn set_pc(&mut self, value: u32) {
-        //println!("Setting pc to {:x}", value);
-        if self.is_op_long() {
-            self.reg.pc = value & 0xffffff;
-        } else {
-            self.reg.pc = value & 0xffff;
-        }
+        self.reg.pc = value & 0xffffff;
     }
 }
 
