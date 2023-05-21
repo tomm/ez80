@@ -28,6 +28,7 @@ mod mos {
     //pub const FA_READ: u32 = 1;
     pub const FA_WRITE: u32 = 2;
     pub const FA_CREATE_NEW: u32 = 4;
+    pub const FA_CREATE_ALWAYS: u32 = 8;
 }
 
 struct MosMap {
@@ -272,6 +273,32 @@ impl AgonMachine {
         env.subroutine_return();
     }
 
+    fn hostfs_mos_f_putc(&mut self, cpu: &mut Cpu) {
+        let ch = self._peek24(cpu.state.sp() + 3);
+        let fptr = self._peek24(cpu.state.sp() + 6);
+
+        match self.open_files.get(&fptr) {
+            Some(mut f) => {
+                f.write(&[ch as u8]).unwrap();
+
+                // no f.tell()...
+                let fpos = f.seek(SeekFrom::Current(0)).unwrap();
+                // save file position to FIL.fptr
+                self._poke24(fptr + mos::FIL_MEMBER_FPTR, fpos as u32);
+
+                // success
+                cpu.state.reg.set24(Reg16::HL, 0);
+            }
+            None => {
+                // error
+                cpu.state.reg.set24(Reg16::HL, 1);
+            }
+        }
+
+        let mut env = Environment::new(&mut cpu.state, self);
+        env.subroutine_return();
+    }
+
     fn hostfs_mos_f_write(&mut self, cpu: &mut Cpu) {
         let fptr = self._peek24(cpu.state.sp() + 3);
         let buf = self._peek24(cpu.state.sp() + 6);
@@ -308,10 +335,10 @@ impl AgonMachine {
     }
 
     fn hostfs_mos_f_read(&mut self, cpu: &mut Cpu) {
-        //fr = f_read(&fil, (void *)address, fSize, &br);		
         let fptr = self._peek24(cpu.state.sp() + 3);
         let mut buf = self._peek24(cpu.state.sp() + 6);
         let len = self._peek24(cpu.state.sp() + 9);
+        //println!("f_read(${:x}, ${:x}, ${:x})", fptr, buf, len);
         match self.open_files.get(&fptr) {
             Some(mut f) => {
                 let mut host_buf: Vec<u8> = vec![0; len as usize];
@@ -518,7 +545,8 @@ impl AgonMachine {
         match std::fs::File::options()
             .read(true)
             .write(mode & mos::FA_WRITE != 0)
-            .create(mode & mos::FA_CREATE_NEW != 0)
+            .create((mode & mos::FA_CREATE_NEW != 0) || (mode & mos::FA_CREATE_ALWAYS != 0))
+            .truncate(mode & mos::FA_CREATE_ALWAYS != 0)
             .open(path) {
             Ok(mut f) => {
                 // wipe the FIL structure
@@ -595,7 +623,7 @@ impl AgonMachine {
                 if cpu.state.pc() == MOS_103_MAP.f_mount { self.hostfs_mos_f_mount(&mut cpu); }
                 if cpu.state.pc() == MOS_103_MAP.f_opendir { self.hostfs_mos_f_opendir(&mut cpu); }
                 if cpu.state.pc() == MOS_103_MAP.f_printf { println!("Un-trapped fatfs call: f_printf"); }
-                if cpu.state.pc() == MOS_103_MAP.f_putc { println!("Un-trapped fatfs call: f_putc"); }
+                if cpu.state.pc() == MOS_103_MAP.f_putc { self.hostfs_mos_f_putc(&mut cpu); }
                 if cpu.state.pc() == MOS_103_MAP.f_puts { println!("Un-trapped fatfs call: f_puts"); }
                 if cpu.state.pc() == MOS_103_MAP.f_readdir { self.hostfs_mos_f_readdir(&mut cpu); }
                 if cpu.state.pc() == MOS_103_MAP.f_rename { println!("Un-trapped fatfs call: f_rename"); }
@@ -606,7 +634,7 @@ impl AgonMachine {
                 if cpu.state.pc() == MOS_103_MAP.f_unlink { println!("Un-trapped fatfs call: f_unlink"); }
             }
 
-            //if cpu.state.pc() == 0x43838 { trace_for = 1000; cpu.set_trace(true); }
+            //if cpu.state.pc() == 0x40030 { trace_for = 1000000; cpu.set_trace(true); }
             //if trace_for == 0 { cpu.set_trace(false); } else { trace_for -= 1; }
 
             cpu.execute_instruction(self);
