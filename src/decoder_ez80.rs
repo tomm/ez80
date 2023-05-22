@@ -254,8 +254,8 @@ impl DecoderEZ80 {
                 0x1f => Some(build_ld_idx_disp_rr(Reg16::IY, Reg16::DE)),
                 0x27 => Some(build_ld_rr_idx_disp(Reg16::HL, Reg16::IY)),
                 0x2f => Some(build_ld_idx_disp_rr(Reg16::IY, Reg16::HL)),
-                0x31 => Some(build_ld_rr_idx_disp(Reg16::IY, Reg16::IY)),
-                0x37 => Some(build_ld_rr_idx_disp(Reg16::IX, Reg16::IY)),
+                0x31 => Some(build_ld_rr_idx_disp(Reg16::IX, Reg16::IY)),
+                0x37 => Some(build_ld_rr_idx_disp(Reg16::IY, Reg16::IY)),
                 0x3e => Some(build_ld_idx_disp_rr(Reg16::IY, Reg16::IY)),
                 0x3f => Some(build_ld_idx_disp_rr(Reg16::IY, Reg16::IX)),
                 0x86 => Some(build_operator_a_idx_offset(Reg16::IY, (operator_add, "ADD"))),
@@ -487,6 +487,7 @@ impl DecoderEZ80 {
                         1 | 3 | 5 | 7 => Some(build_mlt_rr(RP[p.p])),
                         2 => Some(build_lea_rr_ind_offset(Reg16::IX, Reg16::IY)),
                         4 => Some(build_tst_a_n()),
+                        6 => Some(build_log_unimplemented("0x74: TSTIO n")),
                         _ => Some(build_neg()), // NEG
                     },
                     5 => match p.y {
@@ -531,8 +532,8 @@ impl DecoderEZ80 {
                     },
                 3 => match p.z {
                     7 => match p.y {
-                        0 => None, //ld i,hl
-                        2 => None, //ld hl,i
+                        0 => Some(build_log_unimplemented("ld i,hl")),
+                        2 => Some(build_log_unimplemented("ld hl,i")),
                         _ => Some(build_noni_nop()), // Invalid instruction NONI + NOP
                     },
                     _ => Some(build_noni_nop()), // Invalid instruction NONI + NOP
@@ -647,3 +648,13 @@ pub const BLI_A: [(bool, bool, &str); 4] = [
     (true,  true, "IR"),
     (false, true, "DR")
 ];
+
+pub fn build_log_unimplemented(name: &'static str) -> Opcode {
+    Opcode {
+        name: name.to_string(),
+        action: Box::new(move |_: &mut Environment| {
+            println!("Unimplemented opcode: {}", name);
+        })
+    }
+}
+
