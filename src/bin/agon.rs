@@ -42,7 +42,8 @@ fn handle_vdp(tx_to_ez80: &Sender<u8>, rx_from_ez80: &Receiver<u8>) -> bool {
                 0xa => println!(),
                 0xd => {},
                 v if v >= 0x20 && v != 0x7f => {
-                    print!("\x1b[0m{}\x1b[90m", char::from_u32(data as u32).unwrap());
+                    //print!("\x1b[0m{}\x1b[90m", char::from_u32(data as u32).unwrap());
+                    print!("{}", char::from_u32(data as u32).unwrap());
                 }
                 // VDP system control
                 0x17 => {
@@ -120,17 +121,21 @@ fn start_vdp(tx_vdp_to_ez80: Sender<u8>, rx_ez80_to_vdp: Receiver<u8>,
             last_vsync = now;
         }
 
-        // emit stdin input as keyboard events to the ez80, line by line
+        // emit stdin input as keyboard events to the ez80, line by line,
+        // with 1 second waits between lines
         if let Some(t) = start_time {
             let elapsed = now.duration_since(t).unwrap();
-            if elapsed > std::time::Duration::from_secs(2) {
+            if elapsed > std::time::Duration::from_secs(1) {
                 match rx_stdin.try_recv() {
                     Ok(line) => {
                         send_keys(&tx_vdp_to_ez80, &line);
                         send_keys(&tx_vdp_to_ez80, "\r");
                         start_time = Some(std::time::SystemTime::now());
                     }
-                    Err(mpsc::TryRecvError::Disconnected) => {},
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        // when stdin reaches EOF, terminate the emulator
+                        std::process::exit(0);
+                    },
                     Err(mpsc::TryRecvError::Empty) => {}
                 }
             }
