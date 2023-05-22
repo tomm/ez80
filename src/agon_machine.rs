@@ -102,19 +102,19 @@ pub struct AgonMachine {
 
 impl Machine for AgonMachine {
     fn peek(&self, address: u32) -> u8 {
-        if address >= 0xc0000 {
-            println!("eZ80 memory read out of bounds: ${:x}", address);
-            0 
-        } else {
+        if address < 0x20000 || (address >= 0x40000 && address < 0xc0000) {
             self.mem[address as usize]
+        } else {
+            eprintln!("eZ80 memory read out of bounds: ${:x}", address);
+            0xf5
         }
     }
 
     fn poke(&mut self, address: u32, value: u8) {
-        if address >= 0xc0000 || address < 0x40000 {
-            println!("eZ80 memory write out of bounds: ${:x}", address);
-        } else {
+        if address < 0x20000 || (address >= 0x40000 && address < 0xc0000) {
             self.mem[address as usize] = value;
+        } else {
+            eprintln!("eZ80 memory write out of bounds: ${:x}", address);
         }
     }
 
@@ -193,7 +193,7 @@ impl AgonMachine {
         let code = match std::fs::read("MOS.bin") {
             Ok(data) => data,
             Err(e) => {
-                println!("Error opening MOS.bin: {:?}", e);
+                eprintln!("Error opening MOS.bin: {:?}", e);
                 std::process::exit(-1);
             }
         };
@@ -205,7 +205,7 @@ impl AgonMachine {
         // checksum the loaded MOS, to identify supported versions
         let checksum = z80_mem_tools::checksum(self, 0, code.len() as u32);
         if checksum != 0xc102d8 {
-            println!("WARNING: Unsupported MOS version (only 1.03 is supported): disabling hostfs");
+            eprintln!("WARNING: Unsupported MOS version (only 1.03 is supported): disabling hostfs");
             self.enable_hostfs = false;
         }
     }
@@ -228,7 +228,7 @@ impl AgonMachine {
 
     fn hostfs_mos_f_close(&mut self, cpu: &mut Cpu) {
         let fptr = self._peek24(cpu.state.sp() + 3);
-        //println!("f_close(${:x})", fptr);
+        //eprintln!("f_close(${:x})", fptr);
 
         // closes on Drop
         self.open_files.remove(&fptr);
@@ -303,8 +303,8 @@ impl AgonMachine {
         let fptr = self._peek24(cpu.state.sp() + 3);
         let buf = self._peek24(cpu.state.sp() + 6);
         let num = self._peek24(cpu.state.sp() + 9);
-        let num_written_ptr = self._peek24(cpu.state.sp() + 9);
-        //println!("f_write(${:x}, ${:x}, {}, ${:x})", fptr, buf, num, num_written_ptr);
+        let num_written_ptr = self._peek24(cpu.state.sp() + 12);
+        //eprintln!("f_write(${:x}, ${:x}, {}, ${:x})", fptr, buf, num, num_written_ptr);
 
         match self.open_files.get(&fptr) {
             Some(mut f) => {
@@ -338,11 +338,12 @@ impl AgonMachine {
         let fptr = self._peek24(cpu.state.sp() + 3);
         let mut buf = self._peek24(cpu.state.sp() + 6);
         let len = self._peek24(cpu.state.sp() + 9);
-        //println!("f_read(${:x}, ${:x}, ${:x})", fptr, buf, len);
+        let bytes_read_ptr = self._peek24(cpu.state.sp() + 12);
+        //eprintln!("f_read(${:x}, ${:x}, ${:x}, ${:x})", fptr, buf, len, bytes_read_ptr);
         match self.open_files.get(&fptr) {
             Some(mut f) => {
                 let mut host_buf: Vec<u8> = vec![0; len as usize];
-                f.read(host_buf.as_mut_slice()).unwrap();
+                let num_bytes_read = f.read(host_buf.as_mut_slice()).unwrap();
                 // no f.tell()...
                 let fpos = f.seek(SeekFrom::Current(0)).unwrap();
                 // copy to agon ram 
@@ -352,6 +353,8 @@ impl AgonMachine {
                 }
                 // save file position to FIL.fptr
                 self._poke24(fptr + mos::FIL_MEMBER_FPTR, fpos as u32);
+                // save num bytes read
+                self._poke24(bytes_read_ptr, num_bytes_read as u32);
 
                 cpu.state.reg.set24(Reg16::HL, 0); // ok
             }
@@ -445,7 +448,7 @@ impl AgonMachine {
             // MOS filenames may not be valid utf-8
             String::from_utf8_unchecked(z80_mem_tools::get_cstring(self, cd_to_ptr))
         };
-        //println!("f_chdir({})", cd_to);
+        //eprintln!("f_chdir({})", cd_to);
 
         let mut new_path = self.hostfs_current_dir.clone();
         if cd_to == ".." {
@@ -457,7 +460,7 @@ impl AgonMachine {
         match std::fs::metadata(std::env::current_dir().unwrap().join(&new_path)) {
             Ok(metadata) => {
                 if metadata.is_dir() {
-                    //println!("setting path to {:?}", &new_path);
+                    //eprintln!("setting path to {:?}", &new_path);
                     self.hostfs_current_dir = new_path;
                     cpu.state.reg.set24(Reg16::HL, 0);
                 } else {
@@ -484,6 +487,32 @@ impl AgonMachine {
         Environment::new(&mut cpu.state, self).subroutine_return();
     }
 
+    fn hostfs_mos_f_unlink(&mut self, cpu: &mut Cpu) {
+        let filename_ptr = self._peek24(cpu.state.sp() + 3);
+        let filename = unsafe {
+            String::from_utf8_unchecked(z80_mem_tools::get_cstring(self, filename_ptr))
+        };
+        //eprintln!("f_unlink(\"{}\")", filename);
+
+        match std::fs::remove_file(self.hostfs_path().join(filename)) {
+            Ok(()) => {
+                cpu.state.reg.set24(Reg16::HL, 0); // ok
+            }
+            Err(e) => {
+                match e.kind() {
+                    std::io::ErrorKind::NotFound => {
+                        cpu.state.reg.set24(Reg16::HL, 4);
+                    }
+                    _ => {
+                        cpu.state.reg.set24(Reg16::HL, 1);
+                    }
+                }
+            }
+        };
+
+        Environment::new(&mut cpu.state, self).subroutine_return();
+    }
+
     fn hostfs_mos_f_opendir(&mut self, cpu: &mut Cpu) {
         //fr = f_opendir(&dir, path);
         let dir_ptr = self._peek24(cpu.state.sp() + 3);
@@ -492,7 +521,7 @@ impl AgonMachine {
             // MOS filenames may not be valid utf-8
             String::from_utf8_unchecked(z80_mem_tools::get_cstring(self, path_ptr))
         };
-        //println!("f_opendir(${:x}, \"{}\")", dir_ptr, path.trim_end());
+        //eprintln!("f_opendir(${:x}, \"{}\")", dir_ptr, path.trim_end());
 
         match std::fs::read_dir(self.hostfs_path().join(path)) {
             Ok(dir) => {
@@ -541,7 +570,7 @@ impl AgonMachine {
             }
         };
         let mode = self._peek24(cpu.state.sp() + 9);
-        //println!("f_open(${:x}, \"{}\", {})", fptr, &filename, mode);
+        //eprintln!("f_open(${:x}, \"{}\", {})", fptr, &filename, mode);
         match std::fs::File::options()
             .read(true)
             .write(mode & mos::FA_WRITE != 0)
@@ -587,7 +616,7 @@ impl AgonMachine {
 
         cpu.state.set_pc(0x0000);
 
-        let mut trace_for = 0;
+        let mut _trace_for = 0;
 
         loop {
             // fire uart interrupt
@@ -613,29 +642,29 @@ impl AgonMachine {
                 if cpu.state.pc() == MOS_103_MAP.f_open { self.hostfs_mos_f_open(&mut cpu); }
                 if cpu.state.pc() == MOS_103_MAP.f_write { self.hostfs_mos_f_write(&mut cpu); }
                 if cpu.state.pc() == MOS_103_MAP.f_chdir { self.hostfs_mos_f_chdir(&mut cpu); }
-                if cpu.state.pc() == MOS_103_MAP.f_chdrive { println!("Un-trapped fatfs call: f_chdrive"); }
+                if cpu.state.pc() == MOS_103_MAP.f_chdrive { eprintln!("Un-trapped fatfs call: f_chdrive"); }
                 if cpu.state.pc() == MOS_103_MAP.f_closedir { self.hostfs_mos_f_closedir(&mut cpu); }
-                if cpu.state.pc() == MOS_103_MAP.f_getcwd { println!("Un-trapped fatfs call: f_getcwd"); }
-                if cpu.state.pc() == MOS_103_MAP.f_getfree { println!("Un-trapped fatfs call: f_getfree"); }
+                if cpu.state.pc() == MOS_103_MAP.f_getcwd { eprintln!("Un-trapped fatfs call: f_getcwd"); }
+                if cpu.state.pc() == MOS_103_MAP.f_getfree { eprintln!("Un-trapped fatfs call: f_getfree"); }
                 if cpu.state.pc() == MOS_103_MAP.f_getlabel { self.hostfs_mos_f_getlabel(&mut cpu); }
-                if cpu.state.pc() == MOS_103_MAP.f_lseek { println!("Un-trapped fatfs call: f_lseek"); }
-                if cpu.state.pc() == MOS_103_MAP.f_mkdir { println!("Un-trapped fatfs call: f_mkdir"); }
+                if cpu.state.pc() == MOS_103_MAP.f_lseek { eprintln!("Un-trapped fatfs call: f_lseek"); }
+                if cpu.state.pc() == MOS_103_MAP.f_mkdir { eprintln!("Un-trapped fatfs call: f_mkdir"); }
                 if cpu.state.pc() == MOS_103_MAP.f_mount { self.hostfs_mos_f_mount(&mut cpu); }
                 if cpu.state.pc() == MOS_103_MAP.f_opendir { self.hostfs_mos_f_opendir(&mut cpu); }
-                if cpu.state.pc() == MOS_103_MAP.f_printf { println!("Un-trapped fatfs call: f_printf"); }
+                if cpu.state.pc() == MOS_103_MAP.f_printf { eprintln!("Un-trapped fatfs call: f_printf"); }
                 if cpu.state.pc() == MOS_103_MAP.f_putc { self.hostfs_mos_f_putc(&mut cpu); }
-                if cpu.state.pc() == MOS_103_MAP.f_puts { println!("Un-trapped fatfs call: f_puts"); }
+                if cpu.state.pc() == MOS_103_MAP.f_puts { eprintln!("Un-trapped fatfs call: f_puts"); }
                 if cpu.state.pc() == MOS_103_MAP.f_readdir { self.hostfs_mos_f_readdir(&mut cpu); }
-                if cpu.state.pc() == MOS_103_MAP.f_rename { println!("Un-trapped fatfs call: f_rename"); }
-                if cpu.state.pc() == MOS_103_MAP.f_setlabel { println!("Un-trapped fatfs call: f_setlabel"); }
-                if cpu.state.pc() == MOS_103_MAP.f_stat { println!("Un-trapped fatfs call: f_stat"); }
-                if cpu.state.pc() == MOS_103_MAP.f_sync { println!("Un-trapped fatfs call: f_sync"); }
-                if cpu.state.pc() == MOS_103_MAP.f_truncate { println!("Un-trapped fatfs call: f_truncate"); }
-                if cpu.state.pc() == MOS_103_MAP.f_unlink { println!("Un-trapped fatfs call: f_unlink"); }
+                if cpu.state.pc() == MOS_103_MAP.f_rename { eprintln!("Un-trapped fatfs call: f_rename"); }
+                if cpu.state.pc() == MOS_103_MAP.f_setlabel { eprintln!("Un-trapped fatfs call: f_setlabel"); }
+                if cpu.state.pc() == MOS_103_MAP.f_stat { eprintln!("Un-trapped fatfs call: f_stat"); }
+                if cpu.state.pc() == MOS_103_MAP.f_sync { eprintln!("Un-trapped fatfs call: f_sync"); }
+                if cpu.state.pc() == MOS_103_MAP.f_truncate { eprintln!("Un-trapped fatfs call: f_truncate"); }
+                if cpu.state.pc() == MOS_103_MAP.f_unlink { self.hostfs_mos_f_unlink(&mut cpu); }
             }
 
-            //if cpu.state.pc() == 0x40030 { trace_for = 1000000; cpu.set_trace(true); }
-            //if trace_for == 0 { cpu.set_trace(false); } else { trace_for -= 1; }
+            //if cpu.state.pc() == 0x40030 { _trace_for = 1000000; cpu.set_trace(true); }
+            //if _trace_for == 0 { cpu.set_trace(false); } else { _trace_for -= 1; }
 
             cpu.execute_instruction(self);
         }
