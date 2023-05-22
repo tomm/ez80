@@ -310,3 +310,65 @@ fn test_pea() {
     assert_eq!(0xce, sys.peek(0xfe));
     assert_eq!(0xab, sys.peek(0xff));
 }
+
+#[test]
+fn test_alu_ixh_ihl() {
+    let mut sys = PlainMachine::new();
+    let mut cpu = Cpu::new_ez80();
+    cpu.set_trace(true);
+    cpu.set_adl(true);
+
+    sys.poke(0x0000, 0xaf); // xor a
+    sys.poke(0x0001, 0xdd); // ld ix, $cafeba
+    sys.poke(0x0002, 0x21);
+    sys.poke(0x0003, 0xba);
+    sys.poke(0x0004, 0xfe);
+    sys.poke(0x0005, 0xca);
+    sys.poke(0x0006, 0xdd); // add a,ixh
+    sys.poke(0x0007, 0x84);
+    sys.poke(0x0008, 0xdd); // add a,ihl
+    sys.poke(0x0009, 0x85);
+
+    cpu.execute_instruction(&mut sys);
+    cpu.execute_instruction(&mut sys);
+
+    assert_eq!(0xcafeba, cpu.state.reg.get24(Reg16::IX));
+    assert_eq!(0x0, cpu.state.reg.a());
+
+    cpu.execute_instruction(&mut sys);
+
+    assert_eq!(0xfe, cpu.state.reg.a());
+
+    cpu.execute_instruction(&mut sys);
+
+    assert_eq!(0xb8, cpu.state.reg.a());
+}
+
+#[test]
+fn test_alu_ld_ixh_ixl() {
+    let mut sys = PlainMachine::new();
+    let mut cpu = Cpu::new_ez80();
+    cpu.set_trace(true);
+    cpu.set_adl(true);
+    cpu.state.reg.set24(Reg16::IX, 0xcafeba);
+
+    sys.poke(0x0000, 0xdd); // ld ixh,$de
+    sys.poke(0x0001, 0x26);
+    sys.poke(0x0002, 0xde);
+    sys.poke(0x0003, 0xdd); // ld ixl,$89
+    sys.poke(0x0004, 0x2e);
+    sys.poke(0x0005, 0x89);
+    sys.poke(0x0006, 0xdd); // dec ixh
+    sys.poke(0x0007, 0x25);
+    sys.poke(0x0008, 0xdd); // inc ixh
+    sys.poke(0x0009, 0x24);
+
+    cpu.execute_instruction(&mut sys);
+    assert_eq!(0xcadeba, cpu.state.reg.get24(Reg16::IX));
+    cpu.execute_instruction(&mut sys);
+    assert_eq!(0xcade89, cpu.state.reg.get24(Reg16::IX));
+    cpu.execute_instruction(&mut sys);
+    assert_eq!(0xcadd89, cpu.state.reg.get24(Reg16::IX));
+    cpu.execute_instruction(&mut sys);
+    assert_eq!(0xcade89, cpu.state.reg.get24(Reg16::IX));
+}
