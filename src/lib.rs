@@ -7,7 +7,7 @@
 //! To run this example, execute: `cargo run --bin simplest`
 //! 
 //! ```
-//!use iz80::*;
+//!use ez80::*;
 //!
 //!fn main() {
 //!    // Prepare the device
@@ -40,7 +40,6 @@
 
 mod cpu;
 mod machine;
-mod agon_machine;
 mod registers;
 mod state;
 
@@ -61,6 +60,5 @@ mod operators;
 pub use cpu::Cpu;
 pub use machine::Machine;
 pub use machine::PlainMachine;
-pub use machine::AgonMachine;
 pub use registers::*;
 pub use environment::Environment;

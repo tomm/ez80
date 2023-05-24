@@ -1,4 +1,4 @@
-use iz80::*;
+use ez80::*;
 
 /*
 8080/8085 CPU Exerciser by Ian Bartholomew and Frank Cringles

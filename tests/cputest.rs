@@ -1,4 +1,4 @@
-use iz80::*;
+use ez80::*;
 
 // Diagnostics II, version 1.2, CPU test by Supersoft Associates
 

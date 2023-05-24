@@ -1,4 +1,4 @@
-use iz80::*;
+use ez80::*;
 
 fn test_disasm_z80(code: &[u8], expected: &str) {
     let mut sys = PlainMachine::new();

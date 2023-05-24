@@ -1,4 +1,4 @@
-use iz80::*;
+use ez80::*;
 
 //static ZEXDOC: &'static [u8] = include_bytes!("res/zexdoc.com");
 static ZEXALL: &'static [u8] = include_bytes!("res/zexall.com");

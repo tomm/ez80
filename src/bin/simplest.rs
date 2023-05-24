@@ -1,4 +1,4 @@
-use iz80::*;
+use ez80::*;
 
 fn main() {
     // Prepare the device

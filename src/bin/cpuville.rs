@@ -10,8 +10,8 @@ use std::sync::mpsc::TryRecvError;
 use std::thread;
 use std::time::Duration;
 
-use iz80::Cpu;
-use iz80::Machine;
+use ez80::Cpu;
+use ez80::Machine;
 
 static TINY_BASIC: &[u8] = include_bytes!("rom/tinybasic2dms.bin");
 

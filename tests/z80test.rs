@@ -1,4 +1,4 @@
-use iz80::*;
+use ez80::*;
 
 // From https://github.com/raxoft/z80test
 // Not passing

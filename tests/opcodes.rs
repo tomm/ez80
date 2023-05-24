@@ -1,4 +1,4 @@
-use iz80::*;
+use ez80::*;
 
 #[test]
 fn test_two_opcodes() {

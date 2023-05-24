@@ -1,16 +1,11 @@
-# iz80
+# ez80
 
-[![Build Status](https://github.com/ivanizag/iz80/workflows/Build/badge.svg)](https://github.com/ivanizag/iz80/actions?workflow=Build)
-[![Crates](https://img.shields.io/crates/v/iz80.svg)](https://crates.io/crates/iz80)
-[![Documentation](https://docs.rs/iz80/badge.svg)](https://docs.rs/iz80)
+This is an extension of [iz80](https://github.com/ivanizag/iz80) to support the eZ80 CPU.
 
-Zilog eZ80, Z80 and Intel 8080 emulator library for RUST. It passes all the tests of the ZEXALL suite. No cycle emulation accuracy, runs as fast as it can.
-
-To run the experimental Agon emulator:
-
-```shell
-cargo run --bin agon
-```
+It passes all the tests of the ZEXALL suite, but the eZ80 mode is more experimental. It
+is used by the [Agon Light Emulator](https://github.com/astralaster/agon-light-emulator),
+via the [Agon CPU Emulator](https://github.com/tomm/agon-cpu-emulator), which emulates
+the CPU and CPU-connected peripherals of the Agon Light.
 
 To run the ZEXALL test suite for Zilog Z80:
 

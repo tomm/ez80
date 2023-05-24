@@ -1,11 +1,11 @@
 [package]
-name = "iz80"
-version = "0.3.6"
+name = "ez80"
+version = "0.4.0"
 authors = ["Tom Morton <tomm8086@gmail.com>", "Ivan Izaguirre <ivanizag@gmail.com>"]
 edition = "2018"
 license = "BSD-3-Clause"
-description = "eZ80, Z80 and 8080 emulator"
-keywords = ["eZ80", "Z80", "8080", "CPM", "emulator"]
+description = "Zilog eZ80, Z80 and Intel 8080 emulator"
+keywords = ["eZ80", "Z80", "8080", "CPM", "Agon Light", "emulator"]
 homepage = "https://github.com/tomm/ez80"
 repository = "https://github.com/tomm/ez80"
 readme = "README.md"
