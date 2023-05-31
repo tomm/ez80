@@ -501,6 +501,7 @@ impl DecoderEZ80 {
                     6 => match p.y {
                         4 => Some(build_pea(Reg16::IY)),
                         5 => Some(build_ld_a_mb()),
+                        6 => Some(build_log_unimplemented("SLP")), // 0x76
                         7 => Some(build_rsmix()),
                         _ => Some(build_im(IM[p.y])) // IM #
                     }
@@ -527,10 +528,40 @@ impl DecoderEZ80 {
                             3 => Some(build_out_block(BLI_A[p.y-4])), // Block OUTxx
                             _ => panic!("Unreacheable")
                         }
+                    } else if p.z == 3 {
+                        match p.y {
+                            0 => Some(build_log_unimplemented("OTIM")), // 0x83
+                            1 => Some(build_log_unimplemented("OTDM")), // 0x8b
+                            2 => Some(build_log_unimplemented("OTIMR")), // 0x93
+                            3 => Some(build_log_unimplemented("OTDMR")), // 0x9b
+                            _ => Some(build_noni_nop()),
+                        }
+                    } else if p.z == 4 {
+                        match p.y {
+                            0 => Some(build_log_unimplemented("INI2")), // 0x84
+                            1 => Some(build_log_unimplemented("IND2")), // 0x8c
+                            2 => Some(build_log_unimplemented("INI2R")), // 0x94
+                            3 => Some(build_log_unimplemented("IND2R")), // 0x9c
+                            4 => Some(build_log_unimplemented("OUTI2")), // 0xa4
+                            5 => Some(build_log_unimplemented("OUTD2")), // 0xac
+                            6 => Some(build_log_unimplemented("OUTI2R")), // 0xb4
+                            7 => Some(build_log_unimplemented("OTD2R")), // 0xbc
+                            _ => Some(build_noni_nop()),
+                        }
                     } else {
                         Some(build_noni_nop()) // NONI + NOP
                     },
                 3 => match p.z {
+                    2 => match p.y {
+                        0 => Some(build_log_unimplemented("INIRX")), // 0xc2
+                        1 => Some(build_log_unimplemented("INDRX")), // 0xca
+                        _ => Some(build_noni_nop()), // Invalid instruction NONI + NOP
+                    }
+                    3 => match p.y {
+                        0 => Some(build_log_unimplemented("OTIRX")), // 0xc3
+                        1 => Some(build_log_unimplemented("OTDRX")), // 0xcb
+                        _ => Some(build_noni_nop()), // Invalid instruction NONI + NOP
+                    }
                     7 => match p.y {
                         0 => Some(build_log_unimplemented("ld i,hl")),
                         2 => Some(build_log_unimplemented("ld hl,i")),
