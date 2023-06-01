@@ -210,18 +210,17 @@ impl <'a> Environment<'_> {
                     let pc = self.pop();
                     self.state.set_pc(pc);
                 }
-                SizePrefix::LIL => {
+                // according to spec only LIL is valid here, but LIS does work too
+                SizePrefix::LIL | SizePrefix::LIS => {
                     let adl_flag = self.pop_byte_spl();
-                    if adl_flag == 2 {
+                    if adl_flag & 1 == 1 {
+                        let address = self.pop();
+                        self.state.set_pc(address);
+                    } else {
                         let mut address = self.pop_byte_spl() as u32;
                         address += (self.pop_byte_spl() as u32) << 8;
                         self.state.set_pc(address);
                         self.state.reg.adl = false;
-                    } else if adl_flag == 3 {
-                        let address = self.pop();
-                        self.state.set_pc(address);
-                    } else {
-                        panic!("RET: invalid adl flag on stack");
                     }
                 }
                 prefix => {
@@ -240,16 +239,16 @@ impl <'a> Environment<'_> {
                 // but it seems LIL does work from z80 mode...
                 SizePrefix::LIL | SizePrefix::LIS => {
                     let adl_flag = self.pop_byte_spl();
-                    if adl_flag == 2 {
-                        let mut address = self.pop_byte_sps() as u32;
-                        address += (self.pop_byte_sps() as u32) << 8;
-                        self.state.reg.adl = false;
-                        self.state.set_pc(address);
-                    } else {
+                    if adl_flag & 1 == 1 {
                         let mut address = (self.pop_byte_spl() as u32) << 16;
                         address += self.pop_byte_sps() as u32;
                         address += (self.pop_byte_sps() as u32) << 8;
                         self.state.reg.adl = true;
+                        self.state.set_pc(address);
+                    } else {
+                        let mut address = self.pop_byte_sps() as u32;
+                        address += (self.pop_byte_sps() as u32) << 8;
+                        self.state.reg.adl = false;
                         self.state.set_pc(address);
                     }
                 }
