@@ -100,7 +100,7 @@ impl Cpu {
         let pc = env.state.pc();
         let opcode = self.decoder.decode(&mut env);
         if self.trace {
-            print!("==> {:04x}: {} {:20}", pc, env.state.sz_prefix, opcode.disasm(&env));
+            print!("==> {:06x}: {:20}", pc, opcode.disasm(&env));
         }
         opcode.execute(&mut env);
         env.clear_index();
@@ -109,7 +109,7 @@ impl Cpu {
         env.state.reg.set8(Reg8::R, env.state.reg.get8(Reg8::R).wrapping_add(1));
 
         if self.trace {
-            print!(" PC:{:06x} AF:{:04x} BC:{:06x} DE:{:06x} HL:{:06x} SPS:{:04x} SPL:{:06x} IX:{:06x} IY:{:06x} Flags:{:08b} MB {:02x} ADL {:01x} MADL {:01x} tick {}",
+            print!(" PC:{:06x} AF:{:04x} BC:{:06x} DE:{:06x} HL:{:06x} SPS:{:04x} SPL:{:06x} IX:{:06x} IY:{:06x} MB {:02x} ADL {:01x} MADL {:01x} tick {}",
                 self.state.pc(),
                 self.state.reg.get16(Reg16::AF),
                 self.state.reg.get24(Reg16::BC),
@@ -119,7 +119,6 @@ impl Cpu {
                 self.state.reg.get24(Reg16::SP),
                 self.state.reg.get24(Reg16::IX),
                 self.state.reg.get24(Reg16::IY),
-                self.state.reg.get8(Reg8::F),
                 self.state.reg.mbase,
                 self.state.reg.adl as i32,
                 self.state.reg.madl as i32,

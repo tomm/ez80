@@ -56,6 +56,7 @@ mod opcode_io;
 mod opcode_jumps;
 mod opcode_ld;
 mod operators;
+pub mod z80_mem_tools;
 
 pub use cpu::Cpu;
 pub use machine::Machine;

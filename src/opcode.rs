@@ -1,3 +1,4 @@
+use super::state::SizePrefix;
 use super::environment::*;
 use super::registers::*;
 
@@ -14,17 +15,44 @@ impl Opcode {
     }
 
     pub fn disasm(&self, env: &Environment) -> String {
-        let name = if self.name.contains("__index") {
+        let mut name = if self.name.contains("__index") {
             self.name.replace("__index", &env.index_description())
         } else {
             self.name.clone()
         };
 
+        match env.state.sz_prefix {
+            SizePrefix::None => {}
+            _ => {
+                if let Some(after_opcode_pos) = name.find(' ') {
+                    name.insert_str(after_opcode_pos, &env.state.sz_prefix.to_string());
+                }
+            }
+        }
+
+        // hack. when the env.state.index trick is in use to change HL
+        // to IX or IY, modify the opcode text. Note that for opcodes
+        // where HL can appear as the non-index operand (eg LD HL,(IX+1)),
+        // this case is not triggered, because env.state.index is not
+        // used (see prefix_dd in decoder_ez80).
+        match env.state.index {
+            Reg16::IX => { name = name.replace("HL", "IX"); }
+            Reg16::IY => { name = name.replace("HL", "IY"); }
+            _ => {}
+        }
+
         if self.name.contains("nn") {
-            // Immediate argument 16 bits
-            let nn = env.peek16_pc();
-            let nn_str = format!("{:04x}h", nn);
-            name.replace("nn", &nn_str)
+            if env.state.is_imm_long() {
+                // Immediate argument 24 bits
+                let nn = env.peek24_pc();
+                let nn_str = format!("{:06x}h", nn);
+                name.replace("nn", &nn_str)
+            } else {
+                // Immediate argument 16 bits
+                let nn = env.peek16_pc();
+                let nn_str = format!("{:04x}h", nn);
+                name.replace("nn", &nn_str)
+            }
         } else if self.name.contains('n') {
             // Immediate argument 8 bits
             let n = env.peek_pc();

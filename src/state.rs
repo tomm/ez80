@@ -92,10 +92,10 @@ impl State {
 impl std::fmt::Display for SizePrefix {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", match self {
-            &SizePrefix::LIL => ".lil",
-            &SizePrefix::LIS => ".lis",
-            &SizePrefix::SIL => ".sil",
-            &SizePrefix::SIS => ".sis",
+            &SizePrefix::LIL => ".LIL",
+            &SizePrefix::LIS => ".LIS",
+            &SizePrefix::SIL => ".SIL",
+            &SizePrefix::SIS => ".SIS",
             &SizePrefix::None => "",
 
         })

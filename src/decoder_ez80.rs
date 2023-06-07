@@ -70,8 +70,14 @@ impl Decoder for DecoderEZ80 {
             0x0f | 0x1f | 0x2f | 0x07 | 0x17 | 0x27 | 0x31 | 0x37 | 0x3e | 0x3f | 0x86
                 | 0x96 | 0xa6 | 0xb6 | 0x8e | 0x9e | 0xae | 0xbe if env.is_alt_index() => {
                 match env.get_index() {
-                    Reg16::IX => &self.prefix_dd[b0 as usize],
-                    Reg16::IY => &self.prefix_fd[b0 as usize],
+                    Reg16::IX => {
+                        env.clear_index();
+                        &self.prefix_dd[b0 as usize]
+                    }
+                    Reg16::IY => {
+                        env.clear_index();
+                        &self.prefix_fd[b0 as usize]
+                    }
                     _ => panic!("bug")
                 }
             },

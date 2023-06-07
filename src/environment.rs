@@ -110,6 +110,11 @@ impl <'a> Environment<'_> {
         self.peek16(pc)
     }
 
+    pub fn peek24_pc(&self) -> u32 {
+        let pc = self.state.pc();
+        self.peek24(pc)
+    }
+
     pub fn advance_immediate16(&mut self) -> u16 {
         let mut value: u16 = self.advance_pc() as u16;
         value += (self.advance_pc() as u16) << 8;
