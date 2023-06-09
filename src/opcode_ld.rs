@@ -317,7 +317,7 @@ pub fn build_ld_mb_a() -> Opcode {
 
 pub fn build_ld_idx_disp_rr(index_reg: Reg16, src: Reg16) -> Opcode {
     Opcode {
-        name: format!("LD ({:?}+n), {:?}", index_reg, src),
+        name: format!("LD ({:?}d), {:?}", index_reg, src),
         action: Box::new(move |env: &mut Environment| {
             let imm = env.advance_pc() as i8 as i32 as u32;
             if env.state.is_op_long() {
@@ -336,7 +336,7 @@ pub fn build_ld_idx_disp_rr(index_reg: Reg16, src: Reg16) -> Opcode {
 
 pub fn build_ld_rr_idx_disp(dest: Reg16, index_reg: Reg16) -> Opcode {
     Opcode {
-        name: format!("LD {:?}, ({:?}+n)", dest, index_reg),
+        name: format!("LD {:?}, ({:?}d)", dest, index_reg),
         action: Box::new(move |env: &mut Environment| {
             let imm = env.advance_pc() as i8 as i32 as u32;
             if env.state.is_op_long() {

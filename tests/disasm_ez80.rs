@@ -8,7 +8,7 @@ fn test_disasm_z80(code: &[u8], expected: &str) {
         sys.poke(i as u32, code[i]);
     }
 
-    let disasm = cpu.disasm_instruction(&mut sys);
+    let (disasm, _opcode) = cpu.disasm_instruction(&mut sys);
     assert_eq!(expected, disasm);
 }
 

@@ -5,7 +5,7 @@ use super::operators::*;
 
 pub fn build_lea_rr_ind_offset(dest: Reg16, src: Reg16) -> Opcode {
     Opcode {
-        name: format!("LEA {:?}, {:?}+n", dest, src),
+        name: format!("LEA {:?}, {:?}d", dest, src),
         action: Box::new(move |env: &mut Environment| {
             let imm = env.advance_pc() as i8 as i32 as u32;
             if env.state.is_op_long() {
@@ -21,7 +21,7 @@ pub fn build_lea_rr_ind_offset(dest: Reg16, src: Reg16) -> Opcode {
 
 pub fn build_pea(src: Reg16) -> Opcode {
     Opcode {
-        name: format!("PEA {:?}+n", src),
+        name: format!("PEA {:?}d", src),
         action: Box::new(move |env: &mut Environment| {
             let imm = env.advance_pc() as i8 as i32 as u32;
             if env.state.is_op_long() {
@@ -59,7 +59,7 @@ pub fn build_tst_a_n() -> Opcode {
 
 pub fn build_operator_a_idx_offset(idx: Reg16, (op, name): (Operator, &str)) -> Opcode {
     Opcode {
-        name: format!("{} A, ({:?}+n)", name, idx),
+        name: format!("{} A, ({:?}d)", name, idx),
         action: Box::new(move |env: &mut Environment| {
             let offset = env.advance_pc() as i8 as i32 as u32;
             let a = env.state.reg.a();

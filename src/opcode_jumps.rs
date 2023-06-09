@@ -6,7 +6,7 @@ use super::state::SizePrefix;
 // Relative jumps
 pub fn build_djnz() -> Opcode {
     Opcode {
-        name: "DJNZ d".to_string(),
+        name: "DJNZ l".to_string(),
         action: Box::new(move |env: &mut Environment| {
             let offset = env.advance_pc();
             let b = env.state.reg.get8(Reg8::B).wrapping_add(0xff /* -1 */);
@@ -21,7 +21,7 @@ pub fn build_djnz() -> Opcode {
 
 pub fn build_jr_unconditional() -> Opcode {
     Opcode {
-        name: "JR d".to_string(),
+        name: "JR l".to_string(),
         action: Box::new(move |env: &mut Environment| {
             let offset = env.advance_pc();
             relative_jump(env, offset);
@@ -31,7 +31,7 @@ pub fn build_jr_unconditional() -> Opcode {
 
 pub fn build_jr_eq((flag, value, name): (Flag, bool, &str)) -> Opcode {
     Opcode {
-        name: format!("JR {}, d", name),
+        name: format!("JR {}, l", name),
         action: Box::new(move |env: &mut Environment| {
             let offset = env.advance_pc();
             if env.state.reg.get_flag(flag) == value {
@@ -95,7 +95,7 @@ pub fn build_jp_eq((flag, value, name): (Flag, bool, &str)) -> Opcode {
 
 pub fn build_jp_hl() -> Opcode {
     Opcode {
-        name: "JP HL".to_string(), // Note: it is usaully written as JP (HL)
+        name: "JP (HL)".to_string(),
         action: Box::new(move |env: &mut Environment| {
             // Note: no displacement added to the index
             let address = env.index_value();

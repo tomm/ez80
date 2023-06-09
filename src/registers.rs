@@ -121,7 +121,7 @@ impl fmt::Display for Reg8 {
 }
 
 /// Z80 internal register values
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Registers {
     data: [u8; REG_COUNT8],
     shadow: [u8; REG_COUNT8],

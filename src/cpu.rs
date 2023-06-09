@@ -104,7 +104,7 @@ impl Cpu {
         }
         opcode.execute(&mut env);
         env.clear_index();
-        env.state.sz_prefix = SizePrefix::None;
+        env.state.clear_sz_prefix();
         env.state.instructions_executed += 1;
         env.state.reg.set8(Reg8::R, env.state.reg.get8(Reg8::R).wrapping_add(1));
 
@@ -138,10 +138,10 @@ impl Cpu {
     /// 
     /// * `sys` - A representation of the emulated machine that has the Machine trait
     ///  
-    pub fn disasm_instruction(&mut self, sys: &mut dyn Machine) -> String {
+    pub fn disasm_instruction(&mut self, sys: &mut dyn Machine) -> (String, &Opcode) {
         let mut env = Environment::new(&mut self.state, sys);
         let opcode = self.decoder.decode(&mut env);
-        opcode.disasm(&env)
+        (opcode.disasm(&env), opcode)
     }
 
     /// Activates or deactivates traces of the instruction executed and

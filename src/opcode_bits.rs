@@ -18,7 +18,7 @@ pub enum ShiftDir {
 
 pub fn build_rot_r(r: Reg8, (dir, mode, name): (ShiftDir, ShiftMode, &str), fast: bool, indexed: bool) -> Opcode {
     let full_name = if indexed {
-        format!("LD {}, {} {}", r, name, Reg8::_HL)
+        format!("{} {}, {}", name, r, Reg8::_HL)
     } else {
         let separator = if fast {""} else {" "};
         format!("{}{}{}", name, separator, r)

@@ -15,6 +15,7 @@ pub enum SizePrefix {
 /// 
 /// Stores the state of the registers and additional hidden execution
 /// state of the CPU.
+#[derive(Clone)]
 pub struct State {
     /// Values of the Z80 registers
     pub reg: Registers,
@@ -44,6 +45,10 @@ impl State {
             sz_prefix: SizePrefix::None,
             instructions_executed: 0,
         }
+    }
+
+    pub fn clear_sz_prefix(&mut self) {
+        self.sz_prefix = SizePrefix::None;
     }
 
     pub fn is_op_long(&self) -> bool {

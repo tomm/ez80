@@ -653,7 +653,7 @@ pub const CC: [(Flag, bool, &str); 8] = [
     (Flag::P, false, "PO"),
     (Flag::P, true,  "PE"),
     (Flag::S, false, "P"),
-    (Flag::S, true,  "N")
+    (Flag::S, true,  "M")
 ];
 
 pub const ROT: [(ShiftDir, ShiftMode, &str); 8] = [
