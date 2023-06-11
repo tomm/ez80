@@ -100,7 +100,7 @@ impl Cpu {
         let pc = env.state.pc();
         let opcode = self.decoder.decode(&mut env);
         if self.trace {
-            print!("==> {:06x}: {:20}", pc, opcode.disasm(&env));
+            print!("==> {:06x}: {:20}", pc, opcode.disasm(&env).0);
         }
         opcode.execute(&mut env);
         env.clear_index();
@@ -138,10 +138,12 @@ impl Cpu {
     /// 
     /// * `sys` - A representation of the emulated machine that has the Machine trait
     ///  
-    pub fn disasm_instruction(&mut self, sys: &mut dyn Machine) -> (String, &Opcode) {
+    pub fn disasm_instruction(&mut self, sys: &mut dyn Machine) -> String {
         let mut env = Environment::new(&mut self.state, sys);
         let opcode = self.decoder.decode(&mut env);
-        (opcode.disasm(&env), opcode)
+        let (asm, pc_inc) = opcode.disasm(&env);
+        for _ in 0..pc_inc { env.advance_pc(); }
+        asm
     }
 
     /// Activates or deactivates traces of the instruction executed and

@@ -29,22 +29,7 @@ pub fn disassemble(machine: &mut dyn Machine, cpu: &mut Cpu, adl_override: Optio
     while cpu.state.pc() < end {
 
         let opcode_start = cpu.state.pc();
-        let (opcode_asm, opcode) = cpu.disasm_instruction(machine);
-
-        // mega hack. disasm_instruction advances the PC, but 
-        // not over immediate values. the only way we have of
-        // determining if there was an intermediate is by the
-        // presence of 'nn' formatting sequence in opcode.name
-        if opcode.name.contains("nn") {
-            if cpu.state.is_imm_long() {
-                cpu.state.set_pc(cpu.state.pc() + 3);
-            } else {
-                cpu.state.set_pc(cpu.state.pc() + 2);
-            }
-        }
-        else if opcode.name.contains("n") || opcode.name.contains("d") {
-            cpu.state.set_pc(cpu.state.pc() + 1);
-        }
+        let opcode_asm = cpu.disasm_instruction(machine);
 
         // horrible. but adl/non adl wraparound is a pain
         let mut instruction_bytes = vec![];

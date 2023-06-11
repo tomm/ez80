@@ -14,7 +14,11 @@ impl Opcode {
         (self.action)(env);
     }
 
-    pub fn disasm(&self, env: &Environment) -> String {
+    /// returns String, and u32 PC increment due to immediates
+    /// (the PC increment due to the opcode itself, (and due 
+    /// to the state.index hack), have already been applied by
+    /// the decoder.
+    pub fn disasm(&self, env: &Environment) -> (String, u32) {
         let mut name = if self.name.contains("__index") {
             self.name.replace("__index", &env.index_description())
         } else {
@@ -41,37 +45,37 @@ impl Opcode {
             _ => {}
         }
 
-        if self.name.contains("nn") {
+        if name.contains("nn") {
             if env.state.is_imm_long() {
                 // Immediate argument 24 bits
                 let nn = env.peek24_pc();
                 let nn_str = format!("${:x}", nn);
-                name.replace("nn", &nn_str)
+                (name.replace("nn", &nn_str), 3)
             } else {
                 // Immediate argument 16 bits
                 let nn = env.peek16_pc();
                 let nn_str = format!("${:x}", nn);
-                name.replace("nn", &nn_str)
+                (name.replace("nn", &nn_str), 2)
             }
-        } else if self.name.contains('n') {
+        } else if name.contains('n') {
             // Immediate argument 8 bits
             let n = env.peek_pc();
             let n_str = format!("${:x}", n);
-            name.replace('n', &n_str)
-        } else if self.name.contains('d') {
+            (name.replace('n', &n_str), 1)
+        } else if name.contains('d') {
             // Immediate argument 8 bits signed
             // In assembly it's shown with 2 added as if it were from the opcode pc.
-            let d = env.peek_pc() as i8 as i16 + 2;
-            let d_str = if d < 0 { format!("-{:x}h", -d) } else { format!("+{:x}h", d) };
-            name.replace('d', &d_str)
-        } else if self.name.contains('l') {
+            let d = env.peek_pc() as i8 as i16;
+            let d_str = if d < 0 { format!("-${:x}", -d) } else { format!("+${:x}", d) };
+            (name.replace('d', &d_str), 1)
+        } else if name.contains('l') {
             // Jump offset as 8 bits signed.
             // In asm show as absolute address
             let addr = (env.state.pc() as i32 + 1 + env.peek_pc() as i8 as i32) as u32;
             let l_str = format!("${:x}", addr);
-            name.replace('l', &l_str)
+            (name.replace('l', &l_str), 1)
         } else {
-            name
+            (name, 0)
         }
     }
 }
