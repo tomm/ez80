@@ -37,6 +37,7 @@ impl <'a> Environment<'_> {
         let vector = self.peek16(vector_address) as u32;
 
         if self.state.reg.get_iff1() {
+            self.state.reg.set_interrupts(false);
             if self.state.reg.madl {
                 let pc = self.state.pc();
                 if self.state.reg.adl {
