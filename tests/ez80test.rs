@@ -372,3 +372,82 @@ fn test_alu_ld_ixh_ixl() {
     cpu.execute_instruction(&mut sys);
     assert_eq!(0xcade89, cpu.state.reg.get24(Reg16::IX));
 }
+
+#[test]
+fn test_24bit_alu_flags() {
+    let mut sys = PlainMachine::new();
+    let mut cpu = Cpu::new_ez80();
+    cpu.set_trace(true);
+
+    // 16-bit cp hl,de
+    sys.poke(0x0000, 0x0); // nop
+    sys.poke(0x0001, 0xed); // sbc hl,de
+    sys.poke(0x0002, 0x52);
+    sys.poke(0x0003, 0x19); // add hl,de
+
+    cpu.set_adl(true);
+    cpu.state.reg.pc = 0;
+    cpu.state.reg.set8(Reg8::F, 0);
+    cpu.state.reg.set24(Reg16::HL, 0xffffff);
+    cpu.state.reg.set24(Reg16::DE, 0x000001);
+    cpu.execute_instruction(&mut sys);
+    cpu.execute_instruction(&mut sys);
+    cpu.execute_instruction(&mut sys);
+    assert!(!cpu.state.reg.get_flag(Flag::Z));
+    assert!(!cpu.state.reg.get_flag(Flag::C));
+
+    cpu.set_adl(false);
+    cpu.state.reg.pc = 0;
+    cpu.state.reg.set8(Reg8::F, 0);
+    cpu.state.reg.set24(Reg16::HL, 0xffffff);
+    cpu.state.reg.set24(Reg16::DE, 0x000001);
+    cpu.execute_instruction(&mut sys);
+    cpu.execute_instruction(&mut sys);
+    cpu.execute_instruction(&mut sys);
+    assert!(!cpu.state.reg.get_flag(Flag::Z));
+    assert!(!cpu.state.reg.get_flag(Flag::C));
+
+    cpu.set_adl(true);
+    cpu.state.reg.pc = 0;
+    cpu.state.reg.set8(Reg8::F, 0);
+    cpu.state.reg.set24(Reg16::HL, 0xfffffe);
+    cpu.state.reg.set24(Reg16::DE, 0xffffff);
+    cpu.execute_instruction(&mut sys);
+    cpu.execute_instruction(&mut sys);
+    cpu.execute_instruction(&mut sys);
+    assert!(!cpu.state.reg.get_flag(Flag::Z));
+    assert!(cpu.state.reg.get_flag(Flag::C));
+
+    cpu.set_adl(false);
+    cpu.state.reg.pc = 0;
+    cpu.state.reg.set8(Reg8::F, 0);
+    cpu.state.reg.set24(Reg16::HL, 0xfffffe);
+    cpu.state.reg.set24(Reg16::DE, 0xffffff);
+    cpu.execute_instruction(&mut sys);
+    cpu.execute_instruction(&mut sys);
+    cpu.execute_instruction(&mut sys);
+    assert!(!cpu.state.reg.get_flag(Flag::Z));
+    assert!(cpu.state.reg.get_flag(Flag::C));
+
+    cpu.set_adl(true);
+    cpu.state.reg.pc = 0;
+    cpu.state.reg.set8(Reg8::F, 0);
+    cpu.state.reg.set24(Reg16::HL, 0xfffffe);
+    cpu.state.reg.set24(Reg16::DE, 0xfffffe);
+    cpu.execute_instruction(&mut sys);
+    cpu.execute_instruction(&mut sys);
+    cpu.execute_instruction(&mut sys);
+    assert!(cpu.state.reg.get_flag(Flag::Z));
+    assert!(!cpu.state.reg.get_flag(Flag::C));
+
+    cpu.set_adl(false);
+    cpu.state.reg.pc = 0;
+    cpu.state.reg.set8(Reg8::F, 0);
+    cpu.state.reg.set24(Reg16::HL, 0xfffffe);
+    cpu.state.reg.set24(Reg16::DE, 0xfffffe);
+    cpu.execute_instruction(&mut sys);
+    cpu.execute_instruction(&mut sys);
+    cpu.execute_instruction(&mut sys);
+    assert!(cpu.state.reg.get_flag(Flag::Z));
+    assert!(!cpu.state.reg.get_flag(Flag::C));
+}

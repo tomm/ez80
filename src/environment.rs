@@ -33,10 +33,10 @@ impl <'a> Environment<'_> {
     }
 
     pub fn interrupt(&mut self, number: u32) -> () {
-        let vector_address = ((self.state.reg.get8(Reg8::I) as u32) << 8) + number;
-        let vector = self.peek16(vector_address) as u32;
-
         if self.state.reg.get_iff1() {
+            let vector_address = ((self.state.reg.get8(Reg8::I) as u32) << 8) + number;
+            let vector = self.peek16(vector_address) as u32;
+
             self.state.reg.set_interrupts(false);
             if self.state.reg.madl {
                 let pc = self.state.pc();

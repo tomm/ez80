@@ -496,7 +496,7 @@ impl Registers {
         }
     }
 
-    pub(crate) fn get_iff1(&self) -> bool {
+    pub fn get_iff1(&self) -> bool {
         self.iff1
     }
 
