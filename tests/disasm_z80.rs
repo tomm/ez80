@@ -19,10 +19,10 @@ fn test_disasm_nop() {
 
 #[test]
 fn test_disasm_ld_hl_n() {
-    test_disasm_z80(&[0x36, 0x33], "LD (HL), 33h");
+    test_disasm_z80(&[0x36, 0x33], "LD (HL), $33");
 }
 
 #[test]
 fn test_disasm_ld_ix_d_n() {
-    test_disasm_z80(&[0xdd, 0x36, 22, 0x33], "LD (IX+22), 33h");
+    test_disasm_z80(&[0xdd, 0x36, 22, 0x33], "LD (IX+22), $33");
 }

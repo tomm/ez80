@@ -14,12 +14,12 @@ fn test_disasm_z80(code: &[u8], expected: &str) {
 
 #[test]
 fn test_disasm_ld_hl_ix_n() {
-    test_disasm_z80(&[0xdd, 0x27, 0x18], "LD HL, (IX+18h)");
+    test_disasm_z80(&[0xdd, 0x27, 0x18], "LD HL, (IX+$18)");
 }
 
 #[test]
 fn test_disasm_ld_ix_n_hl() {
-    test_disasm_z80(&[0xdd, 0x2f, 0x18], "LD (IX+18h), HL");
+    test_disasm_z80(&[0xdd, 0x2f, 0x18], "LD (IX+$18), HL");
 }
 
 #[test]
