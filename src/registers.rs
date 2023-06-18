@@ -126,8 +126,8 @@ pub struct Registers {
     data: [u8; REG_COUNT8],
     shadow: [u8; REG_COUNT8],
     pub pc: u32,
-    iff1: bool,
-    iff2: bool,
+    pub iff1: bool,
+    pub iff2: bool,
     im: u8,
     mode8080: bool,
     pub adl: bool,  // ez80 24-bit flat addressing mode

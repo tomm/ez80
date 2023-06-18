@@ -61,10 +61,13 @@ pub fn build_ld_r_r(dst: Reg8, src: Reg8, _special: bool) -> Opcode {
                 let value = env.state.reg.get8(src);
                 env.state.reg.set8(dst, value);
 
-                if dst == Reg8::A && src == Reg8::R {
+                if dst == Reg8::A && (src == Reg8::R || src == Reg8::I) {
                     // special case. does set some flags
+                    env.state.reg.put_flag(Flag::N, false);
+                    env.state.reg.put_flag(Flag::H, false);
                     env.state.reg.put_flag(Flag::Z, value == 0);
                     env.state.reg.put_flag(Flag::S, (value as i8) < 0);
+                    env.state.reg.put_flag(Flag::P, env.state.reg.iff2);
                 }
             })
         }
