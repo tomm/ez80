@@ -10,6 +10,8 @@ pub trait Machine {
     /// Sets the memory content to [value] in [address]
     fn poke(&mut self, address: u32, value: u8);
 
+    fn use_cycles(&self, cycles: u32);
+
     /// Returns the memory contents in [address] as word
     /// XXX wrapping is wrong in non-ADL ez80
     fn _peek16(&self, address: u32) -> u16 {
@@ -84,6 +86,9 @@ impl Machine for PlainMachine {
     }
     fn port_out(&mut self, address: u16, value: u8) {
         self.io[address as usize] = value;
+    }
+
+    fn use_cycles(&self, _cycles: u32) {
     }
 }
 

@@ -158,6 +158,7 @@ pub fn build_mlt_rr(reg: Reg16) -> Opcode {
             let a = r & 0xff;
             let b = (r >> 8) & 0xff;
             env.state.reg.set16(reg, a * b);
+            env.sys.use_cycles(4);
         })
     }
 }

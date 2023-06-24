@@ -136,6 +136,9 @@ impl Machine for VilleMachine {
         self.out_port = Some(address as u8);
         self.out_value = value;
     }
+
+    fn use_cycles(&self, _cycles: u32) {
+    }
 }
 
 

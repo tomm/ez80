@@ -13,6 +13,7 @@ pub fn build_djnz() -> Opcode {
             env.state.reg.set8(Reg8::B, b);
             if b != 0 {
                 // Condition not met
+                env.sys.use_cycles(1);
                 relative_jump(env, offset);
             }
         })
@@ -24,6 +25,7 @@ pub fn build_jr_unconditional() -> Opcode {
         name: "JR l".to_string(),
         action: Box::new(move |env: &mut Environment| {
             let offset = env.advance_pc();
+            env.sys.use_cycles(1);
             relative_jump(env, offset);
         })
     }
@@ -35,6 +37,7 @@ pub fn build_jr_eq((flag, value, name): (Flag, bool, &str)) -> Opcode {
         action: Box::new(move |env: &mut Environment| {
             let offset = env.advance_pc();
             if env.state.reg.get_flag(flag) == value {
+                env.sys.use_cycles(2);
                 relative_jump(env, offset);
             }
         })
@@ -76,6 +79,7 @@ pub fn build_jp_unconditional() -> Opcode {
         action: Box::new(move |env: &mut Environment| {
             let address = env.advance_immediate_16mbase_or_24();
             handle_jump_adl_state(env);
+            env.sys.use_cycles(1);
             env.state.set_pc(address);
         })
     }
@@ -87,6 +91,7 @@ pub fn build_jp_eq((flag, value, name): (Flag, bool, &str)) -> Opcode {
         action: Box::new(move |env: &mut Environment| {
             let address = env.advance_immediate_16mbase_or_24();
             if env.state.reg.get_flag(flag) == value {
+                env.sys.use_cycles(1);
                 env.state.set_pc(address);
             }
         })
@@ -99,6 +104,7 @@ pub fn build_jp_hl() -> Opcode {
         action: Box::new(move |env: &mut Environment| {
             // Note: no displacement added to the index
             let address = env.index_value();
+            env.sys.use_cycles(1);
             env.state.set_pc(address);
         })
     }
@@ -243,6 +249,7 @@ pub fn build_ret() -> Opcode {
     Opcode {
         name: "RET".to_string(),
         action: Box::new(move |env: &mut Environment| {
+            env.sys.use_cycles(2);
             env.subroutine_return();
         })
     }
