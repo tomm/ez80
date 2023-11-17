@@ -451,3 +451,32 @@ fn test_24bit_alu_flags() {
     assert!(cpu.state.reg.get_flag(Flag::Z));
     assert!(!cpu.state.reg.get_flag(Flag::C));
 }
+
+#[test]
+fn test_ld_sil() {
+    let mut sys = PlainMachine::new();
+    let mut cpu = Cpu::new_ez80();
+    cpu.set_trace(true);
+
+    // ld.sil (0x20005),hl
+    sys.poke(0x20000, 0x52); // ld.sil (0x20005),hl
+    sys.poke(0x20001, 0x22);
+    sys.poke(0x20002, 0x05);
+    sys.poke(0x20003, 0x00);
+    sys.poke(0x20004, 0x04);
+
+    cpu.set_adl(true);
+    cpu.state.reg.pc = 0x20000;
+    cpu.state.reg.mbase = 1;
+    cpu.state.reg.set8(Reg8::F, 0);
+    cpu.state.reg.set24(Reg16::HL, 0xcafeba);
+    cpu.execute_instruction(&mut sys);
+
+    assert_eq!(sys.peek(0x20005), 0);
+    assert_eq!(sys.peek(0x20006), 0);
+    assert_eq!(sys.peek(0x20007), 0);
+
+    assert_eq!(sys.peek(0x10005), 0xba);
+    assert_eq!(sys.peek(0x10006), 0xfe);
+    assert_eq!(sys.peek(0x10007), 0x00);
+}

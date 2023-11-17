@@ -138,10 +138,16 @@ impl <'a> Environment<'_> {
     }
 
     pub fn advance_immediate_16mbase_or_24(&mut self) -> u32 {
-        if self.state.is_imm_long() {
+        let imm = if self.state.is_imm_long() {
             self.advance_immediate24()
         } else {
-            ((self.state.reg.mbase as u32) << 16) + self.advance_immediate16() as u32
+            self.advance_immediate16() as u32
+        };
+
+        if self.state.is_op_long() {
+            imm
+        } else {
+            (imm & 0xffff) + ((self.state.reg.mbase as u32) << 16)
         }
     }
 
