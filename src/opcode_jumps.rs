@@ -138,20 +138,24 @@ fn handle_call_size_prefix(env: &mut Environment) {
     } else {
         match env.state.sz_prefix {
             SizePrefix::None => {
-                env.push(pc); // 2 bytes onto SPS
+                env.push_byte_sps((pc >> 8) as u8);
+                env.push_byte_sps(pc as u8);
             },
             SizePrefix::LIL | // not valid according to docs, but works
             SizePrefix::SIL => {
-                env.push(pc); // 2 bytes onto SPS
+                env.push_byte_spl((pc >> 8) as u8);
+                env.push_byte_spl(pc as u8);
                 env.push_byte_spl(2);
                 env.state.reg.adl = true;
             }
             SizePrefix::SIS => {
-                env.push(pc); // 2 bytes onto SPS
+                env.push_byte_sps((pc >> 8) as u8);
+                env.push_byte_sps(pc as u8);
                 env.push_byte_spl(2);
             }
             SizePrefix::LIS => {
-                env.push(pc); // 2 bytes onto SPS
+                env.push_byte_spl((pc >> 8) as u8);
+                env.push_byte_spl(pc as u8);
                 eprintln!("invalid call size prefix for ADL=0: LIS");
             }
         }
