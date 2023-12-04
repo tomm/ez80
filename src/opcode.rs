@@ -30,6 +30,8 @@ impl Opcode {
             _ => {
                 if let Some(after_opcode_pos) = name.find(' ') {
                     name.insert_str(after_opcode_pos, &env.state.sz_prefix.to_string());
+                } else {
+                    name += &env.state.sz_prefix.to_string();
                 }
             }
         }
