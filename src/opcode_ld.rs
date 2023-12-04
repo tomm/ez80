@@ -293,7 +293,11 @@ pub fn build_ld_block((inc, repeat, postfix) : (bool, bool, &'static str)) -> Op
 
             if repeat && bc != 0 {
                 // Back to redo the instruction
-                let pc = env.wrap_address(env.state.pc(), -2);
+                let instruction_len = match env.state.sz_prefix {
+                        crate::state::SizePrefix::None => 2,
+                        _ => 3
+                };
+                let pc = env.wrap_address(env.state.pc(), -instruction_len);
                 env.state.set_pc(pc);
             }
         })         
