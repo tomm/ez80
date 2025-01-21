@@ -167,7 +167,7 @@ pub fn build_call() -> Opcode {
     Opcode {
         name: "CALL nn".to_string(),
         action: Box::new(move |env: &mut Environment| {
-            let address = env.advance_immediate_16mbase_or_24();
+            let address = env.advance_immediate16or24();
             handle_call_size_prefix(env);
             env.state.set_pc(address);
         })
