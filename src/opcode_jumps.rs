@@ -13,7 +13,7 @@ pub fn build_djnz() -> Opcode {
             env.state.reg.set8(Reg8::B, b);
             if b != 0 {
                 // Condition not met
-                env.sys.use_cycles(1);
+                env.sys.use_cycles(2);
                 relative_jump(env, offset);
             }
         })
