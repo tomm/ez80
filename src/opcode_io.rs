@@ -174,3 +174,45 @@ pub fn build_out_block((inc, repeat, postfix) : (bool, bool, &'static str)) -> O
         })
     }
 }
+
+pub fn build_otirx_or_otdrx(inc: bool) -> Opcode {
+    Opcode {
+        name: format!("OT{}RX", if inc { 'I' } else { 'D' }),
+        action: Box::new(move |env: &mut Environment| {
+            let value = env.reg8_ext(Reg8::_HL);
+            let address = env.state.reg.get16(Reg16::DE);
+            env.sys.use_cycles(1);
+
+            let bc = if env.state.is_op_long() {
+                env.state.reg.inc_dec24(Reg16::HL, inc);
+                env.state.reg.inc_dec24(Reg16::BC, false /*decrement*/)
+            } else {
+                env.state.reg.inc_dec16(Reg16::HL, inc);
+                env.state.reg.inc_dec16(Reg16::BC, false /*decrement*/)
+            };
+
+            env.port_out(address, value);
+
+            // TUZD-4.3
+            env.state.reg.put_flag(Flag::Z, bc == 0);
+            env.state.reg.put_flag(Flag::N, if value & 0x80 == 0x80 { true } else { false });
+
+            if bc != 0 {
+                // Back to redo the instruction
+                let instruction_len = match env.state.sz_prefix {
+                        crate::state::SizePrefix::None => 2,
+                        _ => 3
+                };
+                let pc = env.wrap_address(env.state.pc(), -instruction_len);
+                env.state.set_pc(pc);
+                // all but one repeat gets the 2-byte opcode cached
+                env.sys.use_cycles(-2);
+                // and the size prefix is cached if present
+                if let crate::state::SizePrefix::None = env.state.sz_prefix {
+                } else {
+                    env.sys.use_cycles(-1);
+                }
+            }
+        })
+    }
+}

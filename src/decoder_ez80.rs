@@ -564,8 +564,8 @@ impl DecoderEZ80 {
                         _ => Some(build_noni_nop()), // Invalid instruction NONI + NOP
                     }
                     3 => match p.y {
-                        0 => Some(build_log_unimplemented("OTIRX")), // 0xc3
-                        1 => Some(build_log_unimplemented("OTDRX")), // 0xcb
+                        0 => Some(build_otirx_or_otdrx(true /* otirx */)), // 0xc3
+                        1 => Some(build_otirx_or_otdrx(false /* otdrx */)), // 0xcb
                         _ => Some(build_noni_nop()), // Invalid instruction NONI + NOP
                     }
                     7 => match p.y {

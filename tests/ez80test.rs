@@ -63,7 +63,6 @@ fn test_ez80_mem_wrap() {
 fn test_ez80_pc_wrap() {
     let mut sys = PlainMachine::new();
     let mut cpu = Cpu::new_ez80();
-    cpu.set_trace(true);
 
     cpu.registers().set8(Reg8::A, 0);
     cpu.state.reg.mbase = 1;
@@ -95,7 +94,6 @@ fn test_ez80_pc_wrap() {
 fn test_size_suffixes() {
     let mut sys = PlainMachine::new();
     let mut cpu = Cpu::new_ez80();
-    cpu.set_trace(true);
 
     for adl in [false, true] {
         cpu.set_adl(adl);
@@ -147,7 +145,6 @@ fn test_size_suffixes() {
 fn test_madl() {
     let mut sys = PlainMachine::new();
     let mut cpu = Cpu::new_ez80();
-    cpu.set_trace(true);
 
     sys.poke(0x0000, 0xed); // STMIX
     sys.poke(0x0001, 0x7d);
@@ -165,7 +162,6 @@ fn test_madl() {
 fn test_ld_mb() {
     let mut sys = PlainMachine::new();
     let mut cpu = Cpu::new_ez80();
-    cpu.set_trace(true);
     cpu.set_adl(true);
 
     cpu.state.reg.mbase = 2;
@@ -189,7 +185,6 @@ fn test_ld_mb() {
 fn test_tst_a_hl() {
     let mut sys = PlainMachine::new();
     let mut cpu = Cpu::new_ez80();
-    cpu.set_trace(true);
     cpu.set_adl(true);
 
     sys.poke(0x0000, 0xed); // TST A,(HL)
@@ -224,7 +219,6 @@ fn test_tst_a_hl() {
 fn test_tst_a_n() {
     let mut sys = PlainMachine::new();
     let mut cpu = Cpu::new_ez80();
-    cpu.set_trace(true);
     cpu.set_adl(true);
 
     sys.poke(0x0000, 0xed); // TST A, 0xed
@@ -258,7 +252,6 @@ fn test_tst_a_n() {
 fn test_tst_a_r() {
     let mut sys = PlainMachine::new();
     let mut cpu = Cpu::new_ez80();
-    cpu.set_trace(true);
     cpu.set_adl(true);
 
     sys.poke(0x0000, 0xed); // TST A, B
@@ -292,7 +285,6 @@ fn test_tst_a_r() {
 fn test_pea() {
     let mut sys = PlainMachine::new();
     let mut cpu = Cpu::new_ez80();
-    cpu.set_trace(true);
     cpu.set_adl(true);
 
     sys.poke(0x0000, 0xed); // PEA IX+$12
@@ -315,7 +307,6 @@ fn test_pea() {
 fn test_alu_ixh_ihl() {
     let mut sys = PlainMachine::new();
     let mut cpu = Cpu::new_ez80();
-    cpu.set_trace(true);
     cpu.set_adl(true);
 
     sys.poke(0x0000, 0xaf); // xor a
@@ -348,7 +339,6 @@ fn test_alu_ixh_ihl() {
 fn test_alu_ld_ixh_ixl() {
     let mut sys = PlainMachine::new();
     let mut cpu = Cpu::new_ez80();
-    cpu.set_trace(true);
     cpu.set_adl(true);
     cpu.state.reg.set24(Reg16::IX, 0xcafeba);
 
@@ -377,7 +367,6 @@ fn test_alu_ld_ixh_ixl() {
 fn test_24bit_alu_flags() {
     let mut sys = PlainMachine::new();
     let mut cpu = Cpu::new_ez80();
-    cpu.set_trace(true);
 
     // 16-bit cp hl,de
     sys.poke(0x0000, 0x0); // nop
@@ -456,7 +445,6 @@ fn test_24bit_alu_flags() {
 fn test_ld_sil() {
     let mut sys = PlainMachine::new();
     let mut cpu = Cpu::new_ez80();
-    cpu.set_trace(true);
 
     // ld.sil (0x20005),hl
     sys.poke(0x20000, 0x52); // ld.sil (0x20005),hl
@@ -526,4 +514,30 @@ fn test_ldir_lil_cycles() {
 
     assert_eq!(cpu.state.reg.pc, 0x3);
     assert_eq!(sys.get_elapsed_cycles(), 1 + 2 + 3 * 3);
+}
+
+#[test]
+fn test_otirx() {
+    let mut sys = PlainMachine::new();
+    let mut cpu = Cpu::new_ez80();
+
+    sys.poke(0x0, 0xed); // otirx
+    sys.poke(0x1, 0xc3);
+    sys.poke(0x100, 0xca);
+    sys.poke(0x101, 0xfe);
+    sys.poke(0x102, 0xba);
+    sys.set_elapsed_cycles(0);
+
+    cpu.set_adl(true);
+    cpu.state.reg.pc = 0x0;
+    cpu.state.reg.set8(Reg8::F, 0);
+    cpu.state.reg.set24(Reg16::BC, 3);
+    cpu.state.reg.set24(Reg16::DE, 0xabcd);
+    cpu.state.reg.set24(Reg16::HL, 0x100);
+    cpu.execute_instruction(&mut sys);
+    cpu.execute_instruction(&mut sys);
+    cpu.execute_instruction(&mut sys);
+
+    assert_eq!(cpu.state.reg.pc, 0x2);
+    assert_eq!(sys.get_elapsed_cycles(), 2 + 3 * 3);
 }
