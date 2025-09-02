@@ -10,7 +10,7 @@ pub trait Machine {
     /// Sets the memory content to [value] in [address]
     fn poke(&mut self, address: u32, value: u8);
 
-    fn use_cycles(&self, cycles: u32);
+    fn use_cycles(&self, cycles: i32);
 
     /// Returns the memory contents in [address] as word
     /// XXX wrapping is wrong in non-ADL ez80
@@ -54,7 +54,8 @@ pub trait Machine {
 /// pokes to memory and the ins and outs of ports.
 pub struct PlainMachine {
     mem: [u8; 4*65536],
-    io: [u8; 4*65536]
+    io: [u8; 4*65536],
+    pub elapsed_cycles: std::cell::Cell<i64>
 }
 
 impl PlainMachine {
@@ -62,8 +63,17 @@ impl PlainMachine {
     pub fn new() -> PlainMachine {
         PlainMachine {
             mem: [0; 4*65536],
-            io: [0; 4*65536]
+            io: [0; 4*65536],
+            elapsed_cycles: std::cell::Cell::new(0)
         }
+    }
+
+    pub fn get_elapsed_cycles(&self) -> i64 {
+        self.elapsed_cycles.get()
+    }
+
+    pub fn set_elapsed_cycles(&self, cycles: i64) {
+        self.elapsed_cycles.set(cycles);
     }
 }
 
@@ -75,20 +85,25 @@ impl Default for PlainMachine {
 
 impl Machine for PlainMachine {
     fn peek(&self, address: u32) -> u8 {
+        self.use_cycles(1);
         self.mem[address as usize]
     }
     fn poke(&mut self, address: u32, value: u8) {
+        self.use_cycles(1);
         self.mem[address as usize] = value;
     }
 
     fn port_in(&mut self, address: u16) -> u8 {
+        self.use_cycles(1);
         self.io[address as usize]
     }
     fn port_out(&mut self, address: u16, value: u8) {
+        self.use_cycles(1);
         self.io[address as usize] = value;
     }
 
-    fn use_cycles(&self, _cycles: u32) {
+    fn use_cycles(&self, _cycles: i32) {
+        self.elapsed_cycles.set(self.elapsed_cycles.get().wrapping_add(_cycles as i64));
     }
 }
 

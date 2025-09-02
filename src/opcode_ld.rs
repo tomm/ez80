@@ -272,6 +272,7 @@ pub fn build_ld_block((inc, repeat, postfix) : (bool, bool, &'static str)) -> Op
             let value = env.reg8_ext(Reg8::_HL);
             let address = env.reg16mbase_or_24(Reg16::DE);
             env.poke(address, value);
+            env.sys.use_cycles(1);
 
             let bc = if env.state.is_op_long() {
                 env.state.reg.inc_dec24(Reg16::DE, inc);
@@ -299,6 +300,13 @@ pub fn build_ld_block((inc, repeat, postfix) : (bool, bool, &'static str)) -> Op
                 };
                 let pc = env.wrap_address(env.state.pc(), -instruction_len);
                 env.state.set_pc(pc);
+                // all but one repeat gets the 2-byte opcode cached
+                env.sys.use_cycles(-2);
+                // and the size prefix is cached if present
+                if let crate::state::SizePrefix::None = env.state.sz_prefix {
+                } else {
+                    env.sys.use_cycles(-1);
+                }
             }
         })         
     }

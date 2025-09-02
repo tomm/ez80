@@ -137,7 +137,7 @@ impl Machine for VilleMachine {
         self.out_value = value;
     }
 
-    fn use_cycles(&self, _cycles: u32) {
+    fn use_cycles(&self, _cycles: i32) {
     }
 }
 

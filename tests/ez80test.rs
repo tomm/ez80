@@ -480,3 +480,50 @@ fn test_ld_sil() {
     assert_eq!(sys.peek(0x10006), 0xfe);
     assert_eq!(sys.peek(0x10007), 0x00);
 }
+
+#[test]
+fn test_ldir_cycles() {
+    let mut sys = PlainMachine::new();
+    let mut cpu = Cpu::new_ez80();
+
+    sys.poke(0x10000, 0xed); // ldir
+    sys.poke(0x10001, 0xb0);
+    sys.set_elapsed_cycles(0);
+
+    cpu.set_adl(true);
+    cpu.state.reg.pc = 0x10000;
+    cpu.state.reg.set8(Reg8::F, 0);
+    cpu.state.reg.set24(Reg16::BC, 3);
+    cpu.state.reg.set24(Reg16::DE, 0xff);
+    cpu.state.reg.set24(Reg16::HL, 0x100);
+    cpu.execute_instruction(&mut sys);
+    cpu.execute_instruction(&mut sys);
+    cpu.execute_instruction(&mut sys);
+
+    assert_eq!(cpu.state.reg.pc, 0x10002);
+    assert_eq!(sys.get_elapsed_cycles(), 2 + 3 * 3); // 2 + 3*bc
+}
+
+#[test]
+fn test_ldir_lil_cycles() {
+    let mut sys = PlainMachine::new();
+    let mut cpu = Cpu::new_ez80();
+
+    sys.poke(0x0, 0x49); // ldir.l
+    sys.poke(0x1, 0xed); // ldir
+    sys.poke(0x2, 0xb0);
+    sys.set_elapsed_cycles(0);
+
+    cpu.set_adl(true);
+    cpu.state.reg.pc = 0x0;
+    cpu.state.reg.set8(Reg8::F, 0);
+    cpu.state.reg.set24(Reg16::BC, 3);
+    cpu.state.reg.set24(Reg16::DE, 0xff);
+    cpu.state.reg.set24(Reg16::HL, 0x100);
+    cpu.execute_instruction(&mut sys);
+    cpu.execute_instruction(&mut sys);
+    cpu.execute_instruction(&mut sys);
+
+    assert_eq!(cpu.state.reg.pc, 0x3);
+    assert_eq!(sys.get_elapsed_cycles(), 1 + 2 + 3 * 3);
+}
