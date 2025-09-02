@@ -124,11 +124,10 @@ impl Cpu {
                 self.state.reg.madl as i32,
                 self.state.instructions_executed,
             );
-            println!();
-            /*println!(" [{:02x} {:02x} {:02x} {:02x}]", sys.peek(pc),
+            println!(" [{:02x} {:02x} {:02x} {:02x}]", sys.peek(pc),
                 sys.peek(pc.wrapping_add(1)),
                 sys.peek(pc.wrapping_add(2)),
-                sys.peek(pc.wrapping_add(3)));*/
+                sys.peek(pc.wrapping_add(3)));
         }
     }
 
