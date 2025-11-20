@@ -37,6 +37,14 @@ impl <'a> Environment<'_> {
             let vector_address = ((self.state.reg.get8(Reg8::I) as u32) << 8) + number;
             let vector = self.peek16(vector_address) as u32;
 
+            // So cycles used (in MADL + ADL example) is:
+            // 3 to push PC
+            // 1 to push MADL state
+            // 2 for interrupt vector
+            // = 6
+            // Measured interrupt entry cost on EZ80F92 is 11 cycles, so...
+            self.sys.use_cycles(5);
+
             self.state.reg.set_interrupts(false);
             if self.state.reg.madl {
                 let pc = self.state.pc();
