@@ -263,6 +263,7 @@ pub fn build_reti() -> Opcode {
     Opcode {
         name: "RETI".to_string(),
         action: Box::new(move |env: &mut Environment| {
+            env.sys.use_cycles(2);
             env.subroutine_return();
         })
     }
@@ -272,6 +273,7 @@ pub fn build_retn() -> Opcode {
     Opcode {
         name: "RETN".to_string(),
         action: Box::new(move |env: &mut Environment| {
+            env.sys.use_cycles(2);
             env.subroutine_return();
             env.state.reg.end_nmi();
         })
@@ -283,7 +285,10 @@ pub fn build_ret_eq((flag, value, name): (Flag, bool, &str)) -> Opcode {
         name: format!("RET {}", name),
         action: Box::new(move |env: &mut Environment| {
             if env.state.reg.get_flag(flag) == value {
+                env.sys.use_cycles(2);
                 env.subroutine_return();
+            } else {
+                env.sys.use_cycles(1);
             }
         })
     }
