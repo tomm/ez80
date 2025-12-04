@@ -152,7 +152,7 @@ impl Registers {
         };
 
         reg.set16(Reg16::AF, 0xffff);
-        reg.set16(Reg16::SP, 0xffff);
+        reg.set16(Reg16::SP, 0x0000);
         reg
     }
 
