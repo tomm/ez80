@@ -191,6 +191,10 @@ pub fn build_otirx_or_otdrx(inc: bool) -> Opcode {
                 env.state.reg.inc_dec16(Reg16::BC, false /*decrement*/)
             };
 
+            if env.state.cached_instruction {
+                env.sys.use_cycles(-2);
+            }
+
             env.port_out(address, value);
 
             // TUZD-4.3
@@ -205,8 +209,6 @@ pub fn build_otirx_or_otdrx(inc: bool) -> Opcode {
                 };
                 let pc = env.wrap_address(env.state.pc(), -instruction_len);
                 env.state.set_pc(pc);
-                // all but one repeat gets the 2-byte opcode cached
-                env.sys.use_cycles(-2);
                 // and the size prefix is cached if present
                 if let crate::state::SizePrefix::None = env.state.sz_prefix {
                 } else {

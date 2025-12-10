@@ -103,6 +103,7 @@ impl Cpu {
             print!("==> {:06x}: {:20}", pc, opcode.disasm(&env).0);
         }
         opcode.execute(&mut env);
+        env.state.cached_instruction = env.state.pc() == pc;
         env.clear_index();
         env.state.clear_sz_prefix();
         env.state.instructions_executed += 1;

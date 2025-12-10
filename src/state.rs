@@ -30,6 +30,7 @@ pub struct State {
     pub displacement: i8, // Used for (IX+d) and (iY+d)
     pub sz_prefix: SizePrefix,
     pub instructions_executed: u64,
+    pub cached_instruction: bool,
 }
 
 impl State {
@@ -44,6 +45,7 @@ impl State {
             displacement: 0,
             sz_prefix: SizePrefix::None,
             instructions_executed: 0,
+            cached_instruction: false,
         }
     }
 
