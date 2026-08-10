@@ -79,12 +79,35 @@ impl Cpu {
         }
 
         let mut env = Environment::new(&mut self.state, sys);
+        let pc = env.state.pc();
         let opcode = self.decoder.decode(&mut env);
         opcode.execute(&mut env);
         env.clear_index();
         env.state.clear_sz_prefix();
         env.state.instructions_executed += 1;
         env.state.reg.set8(Reg8::R, env.state.reg.get8(Reg8::R).wrapping_add(1));
+
+        if self.trace {
+            print!(" PC:{:06x} AF:{:04x} BC:{:06x} DE:{:06x} HL:{:06x} SPS:{:04x} SPL:{:06x} IX:{:06x} IY:{:06x} MB {:02x} ADL {:01x} MADL {:01x} tick {}",
+                self.state.pc(),
+                self.state.reg.get16(Reg16::AF),
+                self.state.reg.get24(Reg16::BC),
+                self.state.reg.get24(Reg16::DE),
+                self.state.reg.get24(Reg16::HL),
+                self.state.reg.get16(Reg16::SP),
+                self.state.reg.get24(Reg16::SP),
+                self.state.reg.get24(Reg16::IX),
+                self.state.reg.get24(Reg16::IY),
+                self.state.reg.mbase,
+                self.state.reg.adl as i32,
+                self.state.reg.madl as i32,
+                self.state.instructions_executed,
+            );
+            println!(" [{:02x} {:02x} {:02x} {:02x}]", sys.peek(pc),
+                sys.peek(pc.wrapping_add(1)),
+                sys.peek(pc.wrapping_add(2)),
+                sys.peek(pc.wrapping_add(3)));
+        }
     }
 
     /// Executes a single instruction
