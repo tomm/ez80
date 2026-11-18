@@ -218,6 +218,51 @@ impl Cpu {
         self.state.nmi_pending = true
     }
 
+    /// Initialize eZ80 CPU state for a machine reset without replacing the
+    /// decoder, debug settings, or lifetime instruction counter.
+    pub fn reset_ez80_state(&mut self) {
+        self.state = State {
+            instructions_executed: self.state.instructions_executed,
+            ..State::new()
+        };
+    }
+
+    /// Take a pending eZ80 NMI at an instruction boundary without fetching
+    /// the first handler instruction. The machine owns event arbitration.
+    pub fn accept_pending_ez80_nmi(&mut self, sys: &mut dyn Machine) -> bool {
+        if !self.state.nmi_pending || self.state.reset_pending {
+            return false;
+        }
+
+        let mut env = Environment::new(&mut self.state, sys);
+        let pc = env.state.pc();
+        let adl = env.state.reg.adl;
+        let madl = env.state.reg.madl;
+        env.state.nmi_pending = false;
+        env.state.halted = false;
+        env.state.clear_sz_prefix();
+        env.state.reg.start_nmi();
+
+        // UM0077 Table 21. Mixed-mode NMI always stacks on SPL and
+        // enters ADL, including when the interrupted PC was banked.
+        if adl || madl {
+            if adl {
+                env.push_byte_spl((pc >> 16) as u8);
+            }
+            env.push_byte_spl((pc >> 8) as u8);
+            env.push_byte_spl(pc as u8);
+            if madl {
+                env.push_byte_spl(2 + u8::from(adl));
+            }
+            env.state.reg.adl = true;
+        } else {
+            env.push_byte_sps((pc >> 8) as u8);
+            env.push_byte_sps(pc as u8);
+        }
+        env.state.set_pc(NMI_ADDRESS);
+        true
+    }
+
     /// Signal reset
     pub fn signal_reset(&mut self) {
         self.state.reset_pending = true
